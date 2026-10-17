@@ -1,6 +1,6 @@
-# Releases a beta of develop: "Run workflow" in the Actions tab (or `gh workflow run beta.yml`).
-# Nothing is released by pushing; a beta exists only when this runs. Its "Branch" field says what
-# to release: develop, or a maintenance branch like 1.x; GitHub's "Use workflow from" doesn't matter.
+# Releases a beta of develop: "Run workflow" in the Actions tab with "Use workflow from" set to
+# develop (or `gh workflow run beta.yml --ref develop`). A maintenance branch like 1.x can have
+# betas too. Nothing is released by pushing; a beta exists only when this runs.
 #
 #   1. tools/release works out the version from the branch's commits since its last stable
 #      release, as release-please will: 1.1.0-beta.1, then 1.1.0-beta.2, ... (never lower than a
@@ -14,11 +14,6 @@ name: Beta release
 
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: Branch to release a beta of (develop, or a maintenance branch like 1.x)
-        required: true
-        default: develop
 
 permissions:
   contents: read
@@ -35,15 +30,14 @@ jobs:
     steps:
       - name: Check the branch
         env:
-          BRANCH: ${{ inputs.branch }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           if ! [[ "$BRANCH" =~ ^(develop|[0-9]+\.x)$ ]]; then
-            echo "::error::betas are released from develop or a maintenance branch like 1.x, not \"$BRANCH\"" && exit 1
+            echo "::error::betas are released from develop (Run workflow → Use workflow from → develop) or a maintenance branch like 1.x, not \"$BRANCH\"" && exit 1
           fi
 
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.branch }}
           # The tags, to count from the last release and the betas since.
           fetch-depth: 0
 
