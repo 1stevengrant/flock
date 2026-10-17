@@ -88,6 +88,8 @@ jobs:
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
       version: ${{ needs.release-please.outputs.version }}
+    # The "release" environment's signing secrets: a called workflow sees them only when passed on.
+    secrets: inherit
 
   publish:
     name: Attach builds to the release

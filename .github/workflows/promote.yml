@@ -1,7 +1,8 @@
 # Releases a tested beta as stable: "Run workflow" with its tag (empty: the newest beta), or
 # `gh workflow run promote.yml -f tag=v1.1.0-beta.3`.
 #
-# It opens a PR from promote/<tag> (a branch at exactly that beta) into main. Merging it brings in
+# It opens a PR from promote/<tag> (a branch at exactly that beta) into main, or into its
+# maintenance branch for a beta of one (1.x). Merging it brings in
 # the beta's commits, and release-please's release PR then shows the stable version (1.1.0) and
 # its changelog; merging that releases it. The stable release is exactly the beta that was tested,
 # even when develop has moved on since.
@@ -42,13 +43,22 @@ jobs:
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]] || ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
             echo "::error::no beta tag \"$TAG\"" && exit 1
           fi
-          if git merge-base --is-ancestor "$TAG" origin/main; then
-            echo "::error::$TAG is already in main" && exit 1
+          version=${TAG#v}
+
+          # A beta of develop goes to main; one of a maintenance branch (1.x) back to that branch.
+          if git merge-base --is-ancestor "$TAG" origin/develop; then
+            base=main
+          elif git rev-parse -q --verify "origin/${version%%.*}.x" > /dev/null && git merge-base --is-ancestor "$TAG" "origin/${version%%.*}.x"; then
+            base=${version%%.*}.x
+          else
+            echo "::error::$TAG is neither on develop nor on ${version%%.*}.x" && exit 1
+          fi
+          if git merge-base --is-ancestor "$TAG" "origin/$base"; then
+            echo "::error::$TAG is already in $base" && exit 1
           fi
 
           branch="promote/$TAG"
           git push origin "$TAG^{commit}:refs/heads/$branch"
-          version=${TAG#v}
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+          gh pr create --repo "$GITHUB_REPOSITORY" --base "$base" --head "$branch" \
             --title "chore: promote $version to stable" \
-            --body "Brings beta $TAG into main. Once merged (with a merge commit), release-please's release PR shows the stable version; merging that releases exactly this beta."
+            --body "Brings beta $TAG into $base. Once merged (with a merge commit), release-please's release PR shows the stable version; merging that releases exactly this beta."
