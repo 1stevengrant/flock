@@ -199,6 +199,16 @@ func launchdPath(root string) string {
 		"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"}, ":")
 }
 
+// serviceInstalled reports whether the daemon's LaunchAgent is registered.
+func serviceInstalled() bool {
+	path, err := plistPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
 // stopService unloads the agent and waits until launchd forgets it.
 func stopService(domain string) {
 	_ = exec.Command("launchctl", "bootout", domain+"/"+launchLabel).Run()

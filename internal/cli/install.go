@@ -62,6 +62,9 @@ func newInstallCommand() *cobra.Command {
 				cmd.Printf("! could not update your shell profile: %v\n", err)
 			}
 
+			// Until the first install gets through its privileged steps, Flock isn't set up: the apps
+			// take a registered daemon for a finished setup (Installation.isSetUp, IsSetUp).
+			firstInstall := !serviceInstalled()
 			if err := installService(s.root, bin); err != nil {
 				return fmt.Errorf("install background service: %w", err)
 			}
@@ -71,6 +74,9 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 			if err := ensurePrivileged(cmd, s, bin, ca); err != nil {
+				if firstInstall {
+					_ = uninstallService()
+				}
 				return err
 			}
 			// The daemon started before the privileged steps and still reports what was missing

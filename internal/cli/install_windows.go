@@ -406,6 +406,11 @@ func startDetached(exe string, args []string) error {
 	return cmd.Process.Release()
 }
 
+// serviceInstalled reports whether the daemon starts at sign-in, by scheduled task or Run key.
+func serviceInstalled() bool {
+	return taskInstalled() || runKeyInstalled()
+}
+
 func uninstallService() error {
 	if taskInstalled() {
 		_ = exec.Command("schtasks", "/End", "/TN", taskName).Run()
