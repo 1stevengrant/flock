@@ -56,6 +56,8 @@ func TestNextBeta(t *testing.T) {
 		{"counts up", v("1.0.0"), []commit{feat}, []string{"v1.0.0", "v1.1.0-beta.1", "v1.1.0-beta.2"}, "1.1.0-beta.3", ""},
 		{"after a hotfix", v("1.0.1"), []commit{feat}, []string{"v1.0.0", "v1.1.0-beta.1", "v1.0.1"}, "1.1.0-beta.2", ""},
 		{"never back", v("1.0.0"), []commit{fix}, []string{"v1.1.0-beta.1"}, "", "already released"},
+		{"maintenance line", v("1.4.2"), []commit{fix}, []string{"v1.4.2", "v2.0.0", "v2.1.0-beta.1"}, "1.4.3-beta.1", ""},
+		{"new major past old betas", v("1.4.2"), []commit{breaking}, []string{"v1.5.0-beta.1"}, "2.0.0-beta.1", ""},
 		{"nothing", v("1.0.0"), nil, nil, "", "nothing to release"},
 	}
 	for _, tt := range tests {

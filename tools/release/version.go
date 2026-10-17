@@ -105,7 +105,9 @@ func bump(last version, commits []commit) version {
 
 // nextBeta is the beta to release after the stable release last (nil before the first one, which
 // makes 1.0.0) with commits since then, given every tag in the repository. Betas count up per
-// release, and a beta never goes below one already released, which the updaters wouldn't offer.
+// release, and a beta never goes below one of the same major version already released, which the
+// updaters wouldn't offer. Another major's betas don't count: a maintenance branch (1.x) has betas
+// of its own while 2.x has newer ones.
 func nextBeta(last *version, commits []commit, tags []string) (version, error) {
 	if len(commits) == 0 {
 		return version{}, fmt.Errorf("nothing to release: no commits since v%s", last)
@@ -119,7 +121,7 @@ func nextBeta(last *version, commits []commit, tags []string) (version, error) {
 	base := next
 	for _, t := range tags {
 		v, ok := parseVersion(t)
-		if !ok || !v.isBeta() {
+		if !ok || !v.isBeta() || v.major != base.major {
 			continue
 		}
 		if v.release() == base {
