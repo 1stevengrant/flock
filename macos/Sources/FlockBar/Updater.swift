@@ -70,7 +70,7 @@ final class Updater: NSObject {
     }
 }
 
-extension Updater: @preconcurrency SPUUpdaterDelegate {
+extension Updater: SPUUpdaterDelegate {
     /// Beta items (`<sparkle:channel>beta`) on the beta and experimental channels; stable items always.
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         channel == "beta" || channel == "experimental" ? ["beta"] : []

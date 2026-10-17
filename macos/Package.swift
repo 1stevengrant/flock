@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     dependencies: [
         // The app's updates (Updater.swift); build-app.sh embeds and signs the framework.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.7.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
         // Models and the API client, kept free of UI so they can be unit tested.
