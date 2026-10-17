@@ -58,6 +58,8 @@ jobs:
     with:
       ref: ${{ needs.prepare.outputs.sha }}
       version: ${{ needs.prepare.outputs.version }}
+    # The "release" environment's signing secrets: a called workflow sees them only when passed on.
+    secrets: inherit
 
   publish:
     needs: [prepare, build]
