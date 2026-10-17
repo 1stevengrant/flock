@@ -114,7 +114,13 @@ internal sealed partial class PanelWindow : Window
         // Before the window has been shown once, layout may not be measurable yet.
         var height = scroller.Content is UIElement measured && measured.DesiredSize.Height > 100 ? measured.DesiredSize.Height + 2 : 560;
         var w = (int)(Width * scale);
-        var h = (int)Math.Min(height * scale, area.Height * 0.85);
+        // The size set below includes the window border, which the content doesn't get.
+        var frame = AppWindow.Size.Height - AppWindow.ClientSize.Height;
+        var max = (int)(area.Height * 0.85);
+        var needed = (int)Math.Ceiling(height * scale) + frame;
+        var h = Math.Min(needed, max);
+        // Only scroll when the content doesn't fit (rounding left a pixel or two to scroll before).
+        scroller.VerticalScrollBarVisibility = needed > max ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
         var gap = (int)(12 * scale);
 
         int x, y;
