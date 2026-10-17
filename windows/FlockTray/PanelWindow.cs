@@ -114,7 +114,13 @@ internal sealed partial class PanelWindow : Window
         // Before the window has been shown once, layout may not be measurable yet.
         var height = scroller.Content is UIElement measured && measured.DesiredSize.Height > 100 ? measured.DesiredSize.Height + 2 : 560;
         var w = (int)(Width * scale);
-        var h = (int)Math.Min(height * scale, area.Height * 0.85);
+        // The size set below includes the window border, which the content doesn't get.
+        var frame = AppWindow.Size.Height - AppWindow.ClientSize.Height;
+        var max = (int)(area.Height * 0.85);
+        var needed = (int)Math.Ceiling(height * scale) + frame;
+        var h = Math.Min(needed, max);
+        // Only scroll when the content doesn't fit (rounding left a pixel or two to scroll before).
+        scroller.VerticalScrollBarVisibility = needed > max ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
         var gap = (int)(12 * scale);
 
         int x, y;
@@ -204,11 +210,7 @@ internal sealed partial class PanelWindow : Window
         var updater = model.Updater;
         var idle = updater.State == Updater.Phase.Idle;
         var text = Ui.Caption(idle ? $"Flock {update.Version} is available" : updater.Summary);
-        var button = Ui.Button("Update", () =>
-        {
-            App.Current.Open(WindowKind.Settings, SettingsPane.General);
-            _ = updater.InstallAsync();
-        }, accent: true);
+        var button = Ui.Button("Update", () => App.Current.InstallUpdate(), accent: true);
         button.IsEnabled = idle;
         return Ui.Spread(Ui.Row(6, Ui.Icon(Ui.GlyphDownload, 14, Ui.Accent), text), button);
     }
@@ -423,10 +425,15 @@ internal sealed partial class PanelWindow : Window
 
     private Grid Footer()
     {
+        var quit = Ui.Link("Quit Flock", () => App.Current.Quit());
+        if (model.NeedsSetup)
+        {
+            // Restart and Settings need the daemon; the panel's Set Up button is the way on.
+            return Ui.Spread(Ui.Row(4), quit);
+        }
         var restart = Ui.Link("Restart", () => _ = model.RestartAsync());
         restart.IsEnabled = model.IsRunning && !model.IsRestarting;
         var settings = Ui.Link("Settings…", () => App.Current.Open(WindowKind.Settings));
-        var quit = Ui.Link("Quit Flock", () => App.Current.Quit());
         return Ui.Spread(Ui.Row(4, restart, settings), quit);
     }
 
