@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -33,8 +35,8 @@ import (
 //   - <root>\bin\php.exe, composer.exe, ... — hard links to flock.exe, which acts as
 //     `flock exec <tool>` when started under a tool's name (see ShimTool)
 //   - <root>\bin on the user's PATH (HKCU\Environment)
-//   - flockd.exe, a copy of flock.exe marked as a GUI program so it runs without a console window,
-//     started at logon by the "Flock Daemon" scheduled task as `flockd daemon --watchdog`
+//   - flockd.exe, which runs flock.exe without a console window (see cmd/flockd), started at
+//     logon by the "Flock Daemon" scheduled task as `flockd daemon --watchdog`
 //   - with administrator rights, once: the hosts helper service (flock-helper.exe, shipped next
 //     to flock.exe; see package hosts), an NRPT rule sending .<tld> to Flock's DNS server on
 //     127.0.0.1:53 (see package dns) and the Flock CA in the machine's trusted root store
@@ -192,11 +194,7 @@ func installService(root, bin string) error {
 	if err := os.MkdirAll(filepath.Join(root, "log"), 0o700); err != nil {
 		return err
 	}
-	data, err := os.ReadFile(bin)
-	if err != nil {
-		return err
-	}
-	gui, err := guiSubsystem(data)
+	launcher, err := daemonLauncher(bin)
 	if err != nil {
 		return fmt.Errorf("flockd.exe: %w", err)
 	}
@@ -205,7 +203,7 @@ func installService(root, bin string) error {
 	_ = exec.Command("schtasks", "/End", "/TN", taskName).Run()
 	waitDaemonGone(root)
 	exe, args := daemonCommand(root)
-	if err := replaceExecutable(exe, gui); err != nil {
+	if err := replaceExecutable(exe, launcher); err != nil {
 		return err
 	}
 
@@ -216,11 +214,73 @@ func installService(root, bin string) error {
 		return installRunKey(exe, args)
 	}
 	removeRunKey()
+	return runTask(root)
+}
 
+// daemonLauncher returns flockd.exe: the launcher shipped (and signed) next to the running flock.exe,
+// or, for builds without one (`make windows`), a copy of flock.exe marked as a GUI program. That
+// copy's signature no longer matches, which only matters for signed builds, and those ship flockd.exe.
+func daemonLauncher(bin string) ([]byte, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	if self, err = filepath.EvalSymlinks(self); err != nil {
+		return nil, err
+	}
+	if data, err := os.ReadFile(filepath.Join(filepath.Dir(self), "flockd.exe")); err == nil {
+		return data, nil
+	}
+	data, err := os.ReadFile(bin)
+	if err != nil {
+		return nil, err
+	}
+	return guiSubsystem(data)
+}
+
+// runTask starts the scheduled task and waits until the daemon answers. `schtasks /Run` returns
+// before the task's program has started, so without waiting, a flockd.exe that Windows refuses to
+// run (Smart App Control, an App Control policy) would look like a running daemon.
+func runTask(root string) error {
+	before, _ := taskLastRun()
 	if out, err := exec.Command("schtasks", "/Run", "/TN", taskName).CombinedOutput(); err != nil {
 		return fmt.Errorf("start the daemon: %v: %s", err, bytes.TrimSpace(out))
 	}
+	socket := paths.Socket(root)
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
+		if conn, err := net.DialTimeout("unix", socket, 500*time.Millisecond); err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		// Until the task's last run time changes, its last result is the previous run's.
+		if last, result := taskLastRun(); last != before && result>>16 == 0x8007 {
+			exe, _ := daemonCommand(root)
+			return fmt.Errorf("Windows refused to start %s: %v", exe, windows.Errno(result&0xFFFF))
+		}
+	}
+	fmt.Printf("! the daemon hasn't answered yet — `flock status` shows when it does, %s what went wrong if it doesn't\n",
+		filepath.Join(root, "log", "daemon.log"))
 	return nil
+}
+
+// taskLastRun returns the scheduled task's last run time, as schtasks prints it, and that run's result
+// (an HRESULT; 0x8007xxxx wraps the Windows error that kept the program from starting).
+func taskLastRun() (string, uint32) {
+	out, err := exec.Command("schtasks", "/Query", "/TN", taskName, "/V", "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return "", 0
+	}
+	// HostName, TaskName, Next Run Time, Status, Logon Mode, Last Run Time, Last Result, ...
+	// (the column titles are translated; their order isn't).
+	record, err := csv.NewReader(bytes.NewReader(out)).Read()
+	if err != nil || len(record) < 7 {
+		return "", 0
+	}
+	result, err := strconv.ParseInt(strings.TrimSpace(record[6]), 10, 64)
+	if err != nil {
+		return record[5], 0
+	}
+	return record[5], uint32(result)
 }
 
 func registerTask(exe string, args []string) error {
@@ -436,10 +496,7 @@ func restartService() error {
 		// Also a daemon the task didn't start (`flock install` starts one directly).
 		stopDaemonProcess()
 		waitDaemonGone(root)
-		if out, err := exec.Command("schtasks", "/Run", "/TN", taskName).CombinedOutput(); err != nil {
-			return fmt.Errorf("schtasks /Run: %v: %s", err, bytes.TrimSpace(out))
-		}
-		return nil
+		return runTask(root)
 	}
 	if runKeyInstalled() {
 		stopDaemonProcess()
@@ -498,7 +555,7 @@ func ensurePrivileged(cmd *cobra.Command, s *state, bin string, ca *certs.CA) er
 		return nil
 	}
 
-	args :=[]string{"privileged-setup", "--tld", s.cfg.TLD, "--ca", ca.CertPath(), "--source", source}
+	args := []string{"privileged-setup", "--tld", s.cfg.TLD, "--ca", ca.CertPath(), "--source", source}
 	if blocked {
 		cmd.Println("→ setting up DNS for *." + s.cfg.TLD + " and the local CA (Windows asks for permission)…")
 		args = append(args, "--no-helper")

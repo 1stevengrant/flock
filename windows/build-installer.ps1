@@ -1,4 +1,4 @@
-# Builds Flock-Setup-x64.exe into windows\dist\: the flock CLI and hosts helper, the tray app
+# Builds Flock-Setup-x64.exe into windows\dist\: the flock CLI, hosts helper and daemon launcher, the tray app
 # (via build.ps1, which also runs the FlockKit tests) and the Inno Setup installer around them.
 #
 #   .\windows\build-installer.ps1
@@ -29,6 +29,8 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     go build -ldflags "-s -w -X main.version=$version" -o "$out\flock-helper.exe" ./cmd/flock-helper
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    go build -ldflags "-s -w -H windowsgui" -o "$out\flockd.exe" ./cmd/flockd
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
@@ -37,7 +39,7 @@ finally {
 
 # Signed when build.yml set up signing (sign.ps1), like the tray app (build.ps1) and the installer.
 $sign = Join-Path $PSScriptRoot "sign.ps1"
-& $sign "$out\flock.exe" "$out\flock-helper.exe"
+& $sign "$out\flock.exe" "$out\flock-helper.exe" "$out\flockd.exe"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & (Join-Path $PSScriptRoot "build.ps1")

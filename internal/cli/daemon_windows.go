@@ -15,8 +15,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// redirectOutput points stdout and stderr at f. flockd.exe is a GUI program without a console,
-// so without this, output and Go runtime panics would be lost.
+// redirectOutput points stdout and stderr at f. The background daemon runs without a visible
+// console (see cmd/flockd), so without this, output and Go runtime panics would be lost.
 func redirectOutput(f *os.File) {
 	_ = windows.SetStdHandle(windows.STD_OUTPUT_HANDLE, windows.Handle(f.Fd()))
 	_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(f.Fd()))
@@ -32,9 +32,10 @@ func runWatchdog(cmd *cobra.Command, logFile string) error {
 	if err != nil {
 		return err
 	}
-	// The daemon runs as the console flock.exe next to flockd.exe, in a console without a window:
-	// the programs it starts (php-cgi, postgres, php -v, ...) inherit that console. Started from
-	// the windowless flockd.exe directly, every one of them would open a console window.
+	// The daemon runs as the console flock.exe, in a console without a window: the programs it
+	// starts (php-cgi, postgres, php -v, ...) inherit that console. flockd.exe runs flock.exe for the
+	// watchdog already; flockd.exe from before that was a GUI copy of flock.exe running the watchdog
+	// itself, and from a GUI program every one of them would open a console window.
 	daemonExe := self
 	if console := filepath.Join(filepath.Dir(self), "flock.exe"); !strings.EqualFold(console, self) {
 		if _, err := os.Stat(console); err == nil {
