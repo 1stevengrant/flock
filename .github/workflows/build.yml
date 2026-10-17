@@ -8,6 +8,7 @@
 #     these very files to the release.
 #   - by hand from the Actions tab (any branch): unsigned, named dev-<commit>
 #   - from release.yml, only when it cannot find the merge queue's builds
+#   - from beta.yml, for a beta (named with its version, e.g. 1.1.0-beta.2)
 name: Build
 
 on:
@@ -104,6 +105,9 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
       SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+      # build-app.sh builds it in as SUPublicEDKey; Sparkle installs only updates signed with its
+      # private half (SPARKLE_PRIVATE_KEY, used by tools/release).
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -120,6 +124,11 @@ jobs:
       - name: Require signing
         if: env.SIGNING != 'true' && (github.event_name == 'merge_group' || inputs.version != '')
         run: echo "::error::the MACOS_* signing secrets are not set" && exit 1
+
+      # Without the key, the app would never update itself.
+      - name: Require the update key
+        if: env.SPARKLE_PUBLIC_KEY == '' && (github.event_name == 'merge_group' || inputs.version != '')
+        run: echo "::error::the SPARKLE_PUBLIC_KEY variable is not set (go run ./tools/release keygen)" && exit 1
 
       # Into a keychain of its own; build-app.sh signs with $SIGN_IDENTITY and notarizes with the
       # API key at $NOTARY_KEY_PATH.

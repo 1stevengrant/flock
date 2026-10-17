@@ -1,0 +1,52 @@
+# Adds a published release to the update feed: releases.json and appcast.xml, kept as the assets of
+# the "updates" release (created here the first time). The apps read appcast.xml from
+# https://github.com/<repo>/releases/download/updates/appcast.xml; the website reads releases.json.
+# Needs the repository checked out, Go set up, and the release's disk image and installer in `dist`.
+name: Update feed
+description: Add a release to the apps' update feed
+inputs:
+  version:
+    description: The release, e.g. 1.1.0 or 1.1.0-beta.2
+    required: true
+  notes:
+    description: Its release notes (markdown file)
+    required: true
+  dist:
+    description: Folder with Flock-<version>-macOS.dmg and Flock-Setup-<version>-x64.exe
+    default: dist
+  private-key:
+    description: SPARKLE_PRIVATE_KEY, which signs the macOS update
+    required: true
+  token:
+    description: Token that may write releases
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        VERSION: ${{ inputs.version }}
+        NOTES: ${{ inputs.notes }}
+        DIST: ${{ inputs.dist }}
+        SPARKLE_PRIVATE_KEY: ${{ inputs.private-key }}
+      run: |
+        set -euo pipefail
+        feed="$RUNNER_TEMP/feed"
+        mkdir -p "$feed"
+
+        # A pre-release, so it never becomes the "latest" release that download links point to.
+        if ! gh release view updates --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          gh release create updates --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --title "Update feed" \
+            --notes "The feed Flock's apps check for updates (appcast.xml) and the website reads (releases.json). Written by the release workflows; not a release."
+        fi
+        if gh release view updates --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx releases.json; then
+          gh release download updates --repo "$GITHUB_REPOSITORY" --pattern releases.json --dir "$feed"
+        fi
+
+        # The notes as HTML, rendered by GitHub like the release page.
+        gh api markdown -f mode=gfm -f context="$GITHUB_REPOSITORY" -F text=@"$NOTES" > "$feed/notes.html"
+
+        go run ./tools/release feed -version "$VERSION" -notes-html "$feed/notes.html" -dir "$feed" \
+          -macos "$DIST/Flock-$VERSION-macOS.dmg" -windows "$DIST/Flock-Setup-$VERSION-x64.exe"
+        gh release upload updates --repo "$GITHUB_REPOSITORY" --clobber "$feed/releases.json" "$feed/appcast.xml"

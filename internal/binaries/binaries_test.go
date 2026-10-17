@@ -78,6 +78,9 @@ func TestVerify(t *testing.T) {
 
 // server serves a channel's manifest; its responses can be broken per path.
 func server(t *testing.T, priv ed25519.PrivateKey, channel string, serial *atomic.Int64, broken map[string]bool) *httptest.Server {
+	// Fixed per server: the manifest and its signature are separate requests, and a time taken
+	// per request may differ between them, which makes the signature not match.
+	expires := time.Now().AddDate(0, 0, 30).Format(time.RFC3339)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if broken[r.URL.Path] {
 			http.Error(w, "nope", http.StatusBadGateway)
@@ -88,7 +91,7 @@ func server(t *testing.T, priv ed25519.PrivateKey, channel string, serial *atomi
 		if ch == "" {
 			ch = "stable"
 		}
-		data, sig := signed(priv, manifestJSON(ch, serial.Load(), time.Now().AddDate(0, 0, 30).Format(time.RFC3339)))
+		data, sig := signed(priv, manifestJSON(ch, serial.Load(), expires))
 		if strings.HasSuffix(r.URL.Path, ".sig") {
 			w.Write(sig)
 		} else {

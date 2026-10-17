@@ -1,0 +1,106 @@
+# Releases a beta of develop: "Run workflow" in the Actions tab (or `gh workflow run beta.yml --ref develop`).
+# Nothing is released by pushing; a beta exists only when this runs.
+#
+#   1. tools/release works out the version from develop's commits since the last stable release,
+#      as release-please will: 1.1.0-beta.1, then 1.1.0-beta.2, ... (never lower than a beta
+#      already released).
+#   2. build.yml builds and signs it, like a stable release.
+#   3. It is tagged (v1.1.0-beta.1) and published as a GitHub pre-release with its notes, and added
+#      to the update feed: apps with "Beta versions" on offer it, others don't.
+#
+# A beta that works is released as stable with promote.yml.
+name: Beta release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-release
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - name: Require develop
+        if: github.ref_name != 'develop'
+        run: echo "::error::betas are released from develop (Run workflow → Use workflow from → develop)" && exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          # The tags, to count from the last release and the betas since.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Version
+        id: version
+        run: |
+          version=$(go run ./tools/release beta-version)
+          echo "Releasing $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    permissions:
+      contents: read
+      # Windows signing's Azure login.
+      id-token: write
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ needs.prepare.outputs.version }}
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    # SPARKLE_PRIVATE_KEY, which signs the macOS update.
+    environment: release
+    permissions:
+      contents: write
+    concurrency:
+      # One writer of the update feed at a time (release.yml writes it too).
+      group: update-feed
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHA: ${{ needs.prepare.outputs.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release
+        run: |
+          go run ./tools/release notes > "$RUNNER_TEMP/notes.md"
+          for f in "dist/Flock-$VERSION-macOS.dmg" "dist/Flock-Setup-$VERSION-x64.exe"; do
+            [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
+          done
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$SHA" --prerelease --latest=false \
+            --title "Flock $VERSION" --notes-file "$RUNNER_TEMP/notes.md" dist/*
+
+      - uses: ./.github/actions/update-feed
+        with:
+          version: ${{ env.VERSION }}
+          notes: ${{ runner.temp }}/notes.md
+          private-key: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          token: ${{ github.token }}

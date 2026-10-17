@@ -16,6 +16,8 @@ public sealed class ApiConfig
 public sealed class Status
 {
     public string Version { get; init; } = "";
+    /// <summary>The channel config.json follows: "stable", "beta" or "experimental" (`flock channel`).</summary>
+    public string Channel { get; init; } = "stable";
     public int Pid { get; init; }
     public DateTimeOffset StartedAt { get; init; }
     public DnsStatus Dns { get; init; } = new();

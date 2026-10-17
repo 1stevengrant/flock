@@ -46,6 +46,7 @@ type Status struct {
 	Sites             []SiteStatus            `json:"sites"`
 	Processes         []supervisor.ProcStatus `json:"processes"`
 	Warnings          []string                `json:"warnings,omitempty"`
+	Channel           string                  `json:"channel"` // see ChannelOf; the apps' own updates follow it too
 }
 
 // ExtraStatus is an installed catalog service (MySQL, Redis, ...).

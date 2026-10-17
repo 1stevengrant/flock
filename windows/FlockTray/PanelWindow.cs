@@ -137,6 +137,10 @@ internal sealed partial class PanelWindow : Window
         dirty = false;
         var root = new StackPanel { Spacing = 12, Padding = new Thickness(16), Width = Width };
         root.Children.Add(Header());
+        if (model.Updater.Available is { } update)
+        {
+            root.Children.Add(UpdateRow(update));
+        }
         if (model.ActionError is { } failure)
         {
             // Shown whether or not the daemon runs (a failed restart, a toggle the daemon refused).
@@ -192,6 +196,21 @@ internal sealed partial class PanelWindow : Window
         var title = Ui.Column(0, Ui.Text("Flock", "BodyStrongTextBlockStyle"), Ui.Caption(model.Headline));
         var leading = Ui.Row(10, icon, title);
         return model.IsRestarting ? Ui.Spread(leading, new ProgressRing { Width = 16, Height = 16 }) : Ui.Spread(leading);
+    }
+
+    /// <summary>A newer version of the app; Update installs it (Settings → General shows the progress).</summary>
+    private Grid UpdateRow(UpdateFeed.Item update)
+    {
+        var updater = model.Updater;
+        var idle = updater.State == Updater.Phase.Idle;
+        var text = Ui.Caption(idle ? $"Flock {update.Version} is available" : updater.Summary);
+        var button = Ui.Button("Update", () =>
+        {
+            App.Current.Open(WindowKind.Settings, SettingsPane.General);
+            _ = updater.InstallAsync();
+        }, accent: true);
+        button.IsEnabled = idle;
+        return Ui.Spread(Ui.Row(6, Ui.Icon(Ui.GlyphDownload, 14, Ui.Accent), text), button);
     }
 
     private static StackPanel Warnings(List<string> warnings)

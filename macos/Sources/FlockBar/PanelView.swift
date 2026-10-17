@@ -11,6 +11,10 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
+            if let version = model.updater.availableVersion {
+                updateRow(version)
+            }
+
             if let message = model.actionError {
                 errorBanner(message)
             }
@@ -54,6 +58,21 @@ struct PanelView: View {
                 ProgressView().controlSize(.small)
             }
         }
+    }
+
+    /// A newer version of Flock; Update opens Sparkle's window to install it.
+    private func updateRow(_ version: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.accentColor)
+            Text("Flock \(version) is available").font(.callout)
+            Spacer(minLength: 0)
+            Button("Update") {
+                model.updater.checkForUpdates()
+            }
+            .controlSize(.small)
+        }
+        .padding(8)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
     /// The last failed action (restart, a toggle) until it is dismissed or an action succeeds.

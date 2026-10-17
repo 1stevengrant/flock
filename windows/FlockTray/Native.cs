@@ -109,6 +109,72 @@ internal static partial class Native
     /// <summary>A plain error dialog, for when WinUI itself could not start.</summary>
     public static void ShowError(string caption, string text) => MessageBox(IntPtr.Zero, text, caption, 0x10 /* MB_ICONERROR */);
 
+    // Signatures
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WINTRUST_FILE_INFO
+    {
+        public int cbStruct;
+        public string pcwszFilePath;
+        public IntPtr hFile;
+        public IntPtr pgKnownSubject;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WINTRUST_DATA
+    {
+        public int cbStruct;
+        public IntPtr pPolicyCallbackData;
+        public IntPtr pSIPClientData;
+        public int dwUIChoice;
+        public int fdwRevocationChecks;
+        public int dwUnionChoice;
+        public IntPtr pFile;
+        public int dwStateAction;
+        public IntPtr hWVTStateData;
+        public IntPtr pwszURLReference;
+        public int dwProvFlags;
+        public int dwUIContext;
+        public IntPtr pSignatureSettings;
+    }
+
+    [DllImport("wintrust.dll", CharSet = CharSet.Unicode)]
+    private static extern int WinVerifyTrust(IntPtr hwnd, ref Guid action, ref WINTRUST_DATA data);
+
+    /// <summary>
+    /// Whether a file has a valid Authenticode signature whose chain Windows trusts, revocation of
+    /// the whole chain checked (WinVerifyTrust, without any UI). Returns the failure code otherwise.
+    /// </summary>
+    public static int VerifySignature(string path)
+    {
+        var action = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE"); // WINTRUST_ACTION_GENERIC_VERIFY_V2
+        var file = new WINTRUST_FILE_INFO { cbStruct = Marshal.SizeOf<WINTRUST_FILE_INFO>(), pcwszFilePath = path };
+        var filePointer = Marshal.AllocHGlobal(file.cbStruct);
+        try
+        {
+            Marshal.StructureToPtr(file, filePointer, false);
+            var data = new WINTRUST_DATA
+            {
+                cbStruct = Marshal.SizeOf<WINTRUST_DATA>(),
+                dwUIChoice = 2,               // WTD_UI_NONE
+                fdwRevocationChecks = 1,      // WTD_REVOKE_WHOLECHAIN
+                dwUnionChoice = 1,            // WTD_CHOICE_FILE
+                pFile = filePointer,
+                dwStateAction = 1,            // WTD_STATEACTION_VERIFY
+                dwProvFlags = 0x80,           // WTD_REVOCATION_CHECK_CHAIN
+            };
+            var result = WinVerifyTrust(new IntPtr(-1) /* INVALID_HANDLE_VALUE: no UI */, ref action, ref data);
+            data.dwStateAction = 2;           // WTD_STATEACTION_CLOSE
+            WinVerifyTrust(new IntPtr(-1), ref action, ref data);
+            return result;
+        }
+        finally
+        {
+            Marshal.DestroyStructure<WINTRUST_FILE_INFO>(filePointer);
+            Marshal.FreeHGlobal(filePointer);
+        }
+    }
+
     // Opening things
 
     /// <summary>Opens a file, folder or URL with its default program.</summary>

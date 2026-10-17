@@ -27,7 +27,10 @@ public sealed class AppModel
     public LogStore Logs { get; }
     public SettingsStore Settings { get; }
 
-    /// <summary>Raised whenever Status, Error, ActionError or IsRestarting change.</summary>
+    /// <summary>Updates of the app itself (and with it the CLI and daemon).</summary>
+    public Updater Updater { get; }
+
+    /// <summary>Raised whenever Status, Error, ActionError, IsRestarting or the updater's state change.</summary>
     public event Action? Changed;
 
     public AppModel()
@@ -36,6 +39,7 @@ public sealed class AppModel
         Dumps = new DumpStore(Client);
         Logs = new LogStore(Client);
         Settings = new SettingsStore(Client) { OnChange = RefreshAsync };
+        Updater = new Updater(() => UpdateFeed.TakesBetas(Status?.Channel ?? Preferences.Shared.Channel), () => Changed?.Invoke());
     }
 
     public bool IsRunning => Status is not null;
@@ -114,6 +118,12 @@ public sealed class AppModel
         var changed = force || !Json.Same(previous, fresh) || Error is not null;
         Status = fresh;
         Error = null;
+        // Update checks follow the channel also while the daemon isn't running.
+        if (fresh.Channel != Preferences.Shared.Channel)
+        {
+            Preferences.Shared.Channel = fresh.Channel;
+            Preferences.Shared.Save();
+        }
         _ = Settings.RefreshIfVisibleAsync();
 
         // Lists in open windows follow the counters in the status.
@@ -822,6 +832,8 @@ public sealed class Preferences
     public bool DumpsLatestOnly { get; set; } = true;
     /// <summary>SHA-256 of the flock.exe this app last installed (see Installation.NeedsUpdate).</summary>
     public string InstalledFlock { get; set; } = "";
+    /// <summary>The daemon's channel when last seen, for update checks while it isn't running.</summary>
+    public string Channel { get; set; } = "stable";
 
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flock", "tray.json");
 
