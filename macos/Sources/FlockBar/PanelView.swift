@@ -244,14 +244,17 @@ struct PanelView: View {
 
     private var footer: some View {
         HStack {
-            Button("Restart") {
-                Task { await model.restart() }
+            // Restart and Settings need the daemon; before the setup, Set Up Flock is the way on.
+            if !model.needsSetup {
+                Button("Restart") {
+                    Task { await model.restart() }
+                }
+                .disabled(model.isRestarting || model.isUpdating || !model.isRunning)
+                Button("Settings…") {
+                    openWindow.activating(WindowID.settings)
+                }
+                .keyboardShortcut(",")
             }
-            .disabled(model.isRestarting || model.isUpdating || !model.isRunning)
-            Button("Settings…") {
-                openWindow.activating(WindowID.settings)
-            }
-            .keyboardShortcut(",")
             Spacer()
             Button("Quit Flock Bar") {
                 NSApp.terminate(nil)

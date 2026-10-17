@@ -11,7 +11,8 @@ import (
 // guiSubsystem returns a copy of a Windows console executable marked as a GUI program, the only
 // difference `-ldflags -H=windowsgui` makes. Windows then starts it without a console window,
 // which is what the background daemon (flockd.exe) needs; the CLI itself must stay a console
-// program so shells wait for it and see its output.
+// program so shells wait for it and see its output. Only for builds without the flockd.exe
+// launcher (cmd/flockd): the change breaks a signed flock.exe's signature.
 func guiSubsystem(exe []byte) ([]byte, error) {
 	if len(exe) < 0x40 || exe[0] != 'M' || exe[1] != 'Z' {
 		return nil, errors.New("not a Windows executable")

@@ -129,14 +129,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
     /// install buttons, shows the service in Settings → Services, which asks before installing
     /// anything; before the setup the link waits, and Services asks about it once Flock is set up.
     /// flock://secure, from the page served for a site that isn't secured, asks in Settings → Sites.
-    /// flock://update, from `flock update`, installs an update of the app in Settings → General.
+    /// flock://update, from `flock update`, installs an update of the app in Settings → General
+    /// (before the setup without opening Settings).
     /// </summary>
     private void OpenLink(string? text)
     {
         if (UpdateLink.IsUpdateLink(text))
         {
-            Open(WindowKind.Settings, SettingsPane.General);
-            _ = Model.Updater.CheckAndInstallAsync();
+            InstallUpdate(check: true);
             return;
         }
         if (SecureLink.Parse(text) is { } secure && !Model.NeedsSetup)
@@ -166,10 +166,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             return;
         }
-        var start = Model.NeedsSetup ? "Set Up Flock…" : Model.IsRunning ? "Restart Flock" : "Start Flock";
-        // While an update is available it follows "Open Flock"; the rest keep their order.
+        // While an update is available it follows the first item; the rest keep their order.
         var update = Model.Updater.Available is { } available && Model.Updater.State == Updater.Phase.Idle ? $"Update to {available.Version}…" : null;
-        List<string?> items = ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, start, "Quit Flock"];
+        // Before the setup there is nothing to open yet: Mail, Dumps, Logs and Settings all need the daemon.
+        List<string?> items = Model.NeedsSetup
+            ? ["Set Up Flock…", null, "Quit Flock"]
+            : ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, Model.IsRunning ? "Restart Flock" : "Start Flock", "Quit Flock"];
         if (update is not null)
         {
             items.Insert(1, update);
@@ -179,11 +181,19 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             if (choice == 1)
             {
-                Open(WindowKind.Settings, SettingsPane.General);
-                _ = Model.Updater.InstallAsync();
+                InstallUpdate();
                 return;
             }
             choice--;
+        }
+        if (Model.NeedsSetup)
+        {
+            switch (choice)
+            {
+                case 0: Open(WindowKind.Setup); break;
+                case 2: Quit(); break;
+            }
+            return;
         }
         switch (choice)
         {
@@ -192,16 +202,32 @@ public sealed partial class App : Application, IXamlMetadataProvider
             case 3: Open(WindowKind.Dumps); break;
             case 4: Open(WindowKind.Logs); break;
             case 5: Open(WindowKind.Settings); break;
-            case 7 when Model.NeedsSetup: Open(WindowKind.Setup); break;
             case 7: _ = Model.RestartAsync(); break;
             case 8: Quit(); break;
         }
     }
 
-    /// <summary>Opens a window, or brings it to the front when it is already open.</summary>
+    /// <summary>
+    /// Installs the available update, showing it in Settings → General once Flock is set up. Before
+    /// the setup the silent installer runs on its own: Settings has nothing to show yet.
+    /// </summary>
+    public void InstallUpdate(bool check = false)
+    {
+        if (!Model.NeedsSetup)
+        {
+            Open(WindowKind.Settings, SettingsPane.General);
+        }
+        _ = check ? Model.Updater.CheckAndInstallAsync() : Model.Updater.InstallAsync();
+    }
+
+    /// <summary>Opens a window, or brings it to the front when it is already open. Until Flock is set up, that is the setup.</summary>
     public void Open(WindowKind kind, SettingsPane? pane = null)
     {
         panel?.Hide();
+        if (Model.NeedsSetup)
+        {
+            kind = WindowKind.Setup;
+        }
         if (!windows.TryGetValue(kind, out var window))
         {
             window = kind switch
