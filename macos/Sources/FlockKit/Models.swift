@@ -24,6 +24,8 @@ public struct Status: Decodable, Sendable, Equatable {
     public var sites: [Site]
     public var processes: [Process]
     public var warnings: [String]
+    /// The channel config.json follows: "stable", "beta" or "experimental" (`flock channel`).
+    public var channel: String
 
     public struct DNSStatus: Decodable, Sendable, Equatable {
         public var tld: String
@@ -294,7 +296,7 @@ public struct Status: Decodable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case version, pid, startedAt, dns, httpPort, httpsPort, mail, postgres, valkey, extras
-        case xdebug, xdebugBreakpoints, dumps, mailCount, dumpCount, sites, processes, warnings
+        case xdebug, xdebugBreakpoints, dumps, mailCount, dumpCount, sites, processes, warnings, channel
     }
 
     // Go omits empty slices (`omitempty`) or sends null; treat both as empty.
@@ -318,6 +320,7 @@ public struct Status: Decodable, Sendable, Equatable {
         sites = try c.decodeIfPresent([Site].self, forKey: .sites) ?? []
         processes = try c.decodeIfPresent([Process].self, forKey: .processes) ?? []
         warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        channel = try c.decodeIfPresent(String.self, forKey: .channel) ?? "stable"
     }
 }
 

@@ -64,28 +64,53 @@ internal sealed class GeneralPane(SettingsWindow window, AppModel model) : Pane(
         page.Children.Add(Ui.Section("Startup",
             Ui.Setting("Open Flock at sign-in", "Shows the Flock icon in the notification area when you sign in. The daemon itself always starts at sign-in.", startup)));
 
+        var updates = new List<UIElement> { AppUpdate() };
         if (Store.Config is { } channelConfig)
         {
             var experimental = channelConfig.Channel == "experimental";
             var beta = new ToggleSwitch { IsOn = channelConfig.Channel == "beta", IsEnabled = !experimental };
-            beta.Toggled += async (_, _) => await Perform(c => c.UpdateSettingsAsync(new SettingsChange(Channel: beta.IsOn ? "beta" : "stable")));
-            var updates = new List<UIElement>
+            beta.Toggled += async (_, _) =>
             {
-                Ui.Setting("Beta versions", "Get new PHP versions and services earlier, including pre-releases. They may not work yet.", beta),
+                await Perform(c => c.UpdateSettingsAsync(new SettingsChange(Channel: beta.IsOn ? "beta" : "stable")));
+                await Model.Updater.CheckAsync(userInitiated: false);
             };
+            updates.Add(Ui.Setting("Beta versions", "Get new versions of Flock, PHP and services earlier, including pre-releases. They may not work yet.", beta));
             if (experimental)
             {
                 updates.Add(Ui.Row(6, Ui.Icon(Ui.GlyphWarning, 12, Ui.Caution),
                     Ui.Caption("Experimental channel: packages that aren't released yet are offered. `flock channel stable` switches back.", Ui.Caution)));
             }
-            page.Children.Add(Ui.Section("Updates", [.. updates]));
         }
+        page.Children.Add(Ui.Section("Updates", [.. updates]));
 
         if (Store.Config is { } cfg)
         {
             page.Children.Add(Parked(cfg));
         }
         return page;
+    }
+
+    /// <summary>The app's version and its update: what the last check found, a download in progress, or why it failed.</summary>
+    private Border AppUpdate()
+    {
+        var updater = Model.Updater;
+        if (Updater.Current is not { } current)
+        {
+            return Ui.Setting("Flock", "Updates are off in development builds.", null);
+        }
+        var idle = updater.State == Updater.Phase.Idle;
+        var summary = updater.Summary;
+        var description = summary.Length > 0 ? $"Version {current} · {summary}" : $"Version {current}";
+        var button = updater.Available is { } update
+            ? Ui.Button($"Update to {update.Version}", () => _ = updater.InstallAsync(), accent: true)
+            : Ui.Button("Check for Updates", () => _ = updater.CheckAsync(userInitiated: true));
+        button.IsEnabled = idle;
+        var control = idle ? (UIElement)button : Ui.Row(12, new ProgressRing { Width = 16, Height = 16 }, button);
+        if (updater.Available is { NotesUrl: { } notes } && idle)
+        {
+            control = Ui.Row(12, Ui.Link("Release Notes", () => Native.Open(notes)), button);
+        }
+        return Ui.Setting("Flock", description, control);
     }
 
     private StackPanel Parked(FlockConfig config)

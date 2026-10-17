@@ -8,6 +8,7 @@ import Observation
 final class AppModel {
     let client = FlockClient()
     let installation = Installation.current
+    let updater = Updater()
 
     private(set) var status: Status?
     /// Why the status couldn't be read (the daemon isn't running); replaced by every poll.
@@ -42,7 +43,8 @@ final class AppModel {
     var pendingSecure: SecureLink?
 
     /// Shows the service a link asks to install, or the sites for a link that asks to secure one;
-    /// the pane then asks to confirm. Before the setup there are no sites to secure.
+    /// the pane then asks to confirm. Before the setup there are no sites to secure. An update link
+    /// (`flock update`) checks for a new version of the app.
     func handle(_ link: FlockLink) {
         switch link {
         case .install(let link):
@@ -52,6 +54,9 @@ final class AppModel {
             guard !needsSetup else { return }
             pendingSecure = link
             showSettings(.sites)
+        case .update:
+            showSettings(.general)
+            updater.checkForUpdates()
         }
     }
 
@@ -77,6 +82,9 @@ final class AppModel {
         // Snapshots (a development aid) must never change the installation.
         if Snapshot.target == nil, !needsSetup, installation.needsUpdate(recorded: UserDefaults.standard.string(forKey: Self.installedFlockKey)) {
             Task { await updateInstallation() }
+        }
+        if Snapshot.target == nil {
+            updater.start()
         }
     }
 
@@ -122,6 +130,7 @@ final class AppModel {
         let previous = status
         status = new
         error = nil
+        updater.channel = new.channel
         Task { await settings.refreshIfVisible() }
 
         // Lists in open windows follow the counters in the status.

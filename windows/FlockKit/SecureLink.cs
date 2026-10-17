@@ -29,7 +29,8 @@ public sealed record SecureLink(string Site)
     }
 
     /// <summary>Whether text is any flock:// link the app handles.</summary>
-    public static bool IsFlockLink(string? text) => InstallLink.Parse(text) is not null || Parse(text) is not null;
+    public static bool IsFlockLink(string? text) =>
+        InstallLink.Parse(text) is not null || Parse(text) is not null || UpdateLink.IsUpdateLink(text);
 
     /// <summary>Letters, digits, dots and dashes only, so nothing odd ends up in a dialog or a request.</summary>
     private static bool IsSafe(string part) =>

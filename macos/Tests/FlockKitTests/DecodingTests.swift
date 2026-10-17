@@ -26,7 +26,7 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
      "sites":[{"name":"watchtower","domain":"watchtower.test","path":"/code/watchtower","php":"8.5","secured":true,"parked":false,"url":"https://watchtower.test","debugging":true},
               {"name":"legacy","domain":"legacy.test","path":"/code/legacy","php":"7.4","secured":false,"parked":true,"problem":"PHP 7.4 is not installed"}],
      "processes":[{"name":"php8.5-fpm","up":true,"restarts":0},{"name":"postgres","up":false,"restarts":3,"last_error":"exit status 1: could not bind"}],
-     "warnings":["postgres: port 5432 is used by postgres (pid 1)"]}
+     "warnings":["postgres: port 5432 is used by postgres (pid 1)"],"channel":"beta"}
     """)
 
     #expect(status.httpsPort == 443)
@@ -39,6 +39,7 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     #expect(status.sites[1].url == nil && status.sites[1].problem != nil)
     #expect(status.processes[1].lastError == "exit status 1: could not bind")
     #expect(status.isDegraded)
+    #expect(status.channel == "beta")
 }
 
 @Test func decodesExtraDomainsAndTheWildcardState() throws {
@@ -70,6 +71,7 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     #expect(status.postgres == nil && status.valkey == nil && status.extras.isEmpty)
     #expect(status.sites.isEmpty && status.warnings.isEmpty)
     #expect(!status.isDegraded)
+    #expect(status.channel == "stable")
 }
 
 @Test func decodesMailListAndDetail() throws {

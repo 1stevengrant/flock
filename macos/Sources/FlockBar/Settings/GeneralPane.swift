@@ -86,23 +86,24 @@ struct GeneralPane: View {
                     }
                 }
 
-                if let config = store.config {
-                    Section {
-                        Toggle("Beta versions", isOn: Binding(
+                Section {
+                    appUpdates
+                    if let config = store.config {
+                        Toggle(isOn: Binding(
                             get: { config.channel == "beta" },
                             set: { on in Task { await store.perform { _ = try await $0.updateSettings(SettingsChange(channel: on ? "beta" : "stable")) } } }
-                        ))
+                        )) {
+                            Text("Beta versions")
+                            Text("Get new versions of Flock, PHP and services earlier, including pre-releases. They may not work yet.")
+                        }
                         .disabled(config.channel == "experimental")
                         if config.channel == "experimental" {
                             Label("Experimental channel: packages that aren’t released yet are offered. `flock channel stable` switches back.", systemImage: "flask.fill")
                                 .font(.caption).foregroundStyle(.orange)
                         }
-                    } header: {
-                        Text("Updates")
-                    } footer: {
-                        Text("Get new PHP versions and services earlier, including pre-releases. They may not work yet.")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text("Updates")
                 }
 
                 if let config = store.config {
@@ -155,6 +156,38 @@ struct GeneralPane: View {
         } message: { path in
             Text("The sites in \(path) are no longer served. The folder and its projects are not touched.")
         }
+    }
+
+    /// The app's version, what the last check found, and the button to check or update.
+    private var appUpdates: some View {
+        let updater = model.updater
+        return LabeledContent {
+            HStack(spacing: 8) {
+                Text(updateState(updater)).foregroundStyle(.secondary)
+                if updater.isEnabled {
+                    Button(updater.availableVersion.map { "Update to \($0)" } ?? "Check for Updates") {
+                        updater.checkForUpdates()
+                    }
+                    .disabled(updater.isChecking)
+                }
+            }
+        } label: {
+            Text("Flock")
+            Text("Version \(Updater.appVersion)")
+        }
+    }
+
+    private func updateState(_ updater: Updater) -> String {
+        if !updater.isEnabled {
+            return "Updates are off in development builds"
+        }
+        if updater.isChecking {
+            return "Checking…"
+        }
+        if let version = updater.availableVersion {
+            return "\(version) is available"
+        }
+        return updater.upToDate ? "Up to date" : ""
     }
 
     /// How names under the TLD resolve: Flock's DNS server through /etc/resolver, which has no

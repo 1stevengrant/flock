@@ -57,6 +57,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Model.Changed += UpdateTray;
             Model.NeedsSetup = Installation.BundledFlock is not null && !Installation.IsSetUp;
             Model.StartPolling();
+            Model.Updater.StartSchedule();
 
             if (!Model.NeedsSetup && Installation.NeedsUpdate)
             {
@@ -128,9 +129,16 @@ public sealed partial class App : Application, IXamlMetadataProvider
     /// install buttons, shows the service in Settings → Services, which asks before installing
     /// anything; before the setup the link waits, and Services asks about it once Flock is set up.
     /// flock://secure, from the page served for a site that isn't secured, asks in Settings → Sites.
+    /// flock://update, from `flock update`, installs an update of the app in Settings → General.
     /// </summary>
     private void OpenLink(string? text)
     {
+        if (UpdateLink.IsUpdateLink(text))
+        {
+            Open(WindowKind.Settings, SettingsPane.General);
+            _ = Model.Updater.CheckAndInstallAsync();
+            return;
+        }
         if (SecureLink.Parse(text) is { } secure && !Model.NeedsSetup)
         {
             Model.PendingSecure = secure;
@@ -159,8 +167,25 @@ public sealed partial class App : Application, IXamlMetadataProvider
             return;
         }
         var start = Model.NeedsSetup ? "Set Up Flock…" : Model.IsRunning ? "Restart Flock" : "Start Flock";
-        string?[] items = ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, start, "Quit Flock"];
-        switch (tray.ShowMenu(items, defaultItem: 0))
+        // While an update is available it follows "Open Flock"; the rest keep their order.
+        var update = Model.Updater.Available is { } available && Model.Updater.State == Updater.Phase.Idle ? $"Update to {available.Version}…" : null;
+        List<string?> items = ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, start, "Quit Flock"];
+        if (update is not null)
+        {
+            items.Insert(1, update);
+        }
+        var choice = tray.ShowMenu([.. items], defaultItem: 0);
+        if (update is not null && choice >= 1)
+        {
+            if (choice == 1)
+            {
+                Open(WindowKind.Settings, SettingsPane.General);
+                _ = Model.Updater.InstallAsync();
+                return;
+            }
+            choice--;
+        }
+        switch (choice)
         {
             case 0: ShowPanel(); break;
             case 2: Open(WindowKind.Mail); break;

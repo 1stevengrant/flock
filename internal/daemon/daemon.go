@@ -833,6 +833,7 @@ func (d *daemon) Status() api.Status {
 			}
 		}
 		st.Xdebug, st.XdebugBreakpoints = d.cfg.Xdebug, d.cfg.XdebugBreakpoints
+		st.Channel = api.ChannelOf(d.cfg)
 		st.Dumps = d.cfg.Dumps
 
 		// Without the helper, sites resolve only through the DNS rule: say so when that fails too.

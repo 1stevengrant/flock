@@ -18,7 +18,7 @@ public class DecodingTests
     public void DecodesAFullStatus()
     {
         var status = FlockJson.Decode<Status>("""
-            {"version":"0893ae2","pid":91994,"started_at":"2026-10-13T14:10:01.123456+02:00",
+            {"version":"0893ae2","channel":"beta","pid":91994,"started_at":"2026-10-13T14:10:01.123456+02:00",
              "dns":{"tld":"test","addr":"127.0.0.1:53535"},"http_port":80,"https_port":443,
              "mail":"127.0.0.1:2525","postgres":"18.6 on 127.0.0.1:5432",
              "extras":[{"id":"redis","name":"Redis","version":"7.2.16","port":6379,"enabled":true,"up":true},{"id":"mysql"}],
@@ -30,6 +30,7 @@ public class DecodingTests
             """);
 
         Assert.Equal(443, status.HttpsPort);
+        Assert.Equal("beta", status.Channel);
         Assert.Null(status.Valkey);
         Assert.Equal(["redis", "mysql"], status.Extras.Select(e => e.Id));
         Assert.True(status.Extras[0].Up);
@@ -60,6 +61,9 @@ public class DecodingTests
                        "node":"24","node_source":"project","node_pinned":"24","node_file":"C:\\code\\shop\\.flockrc","node_shadowed":".nvmrc: 20"},
                       {"name":"blog","domain":"blog.test","path":"C:\\code\\blog","php":"8.5","secured":false,"parked":true}]}
             """);
+
+        // Daemons before the channel was in the status: stable.
+        Assert.Equal("stable", status.Channel);
 
         var shop = status.Sites[0];
         Assert.Equal((Status.VersionSource.Isolated, "8.4"), (shop.PhpSource, shop.PhpPinned));

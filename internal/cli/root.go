@@ -24,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(
 		newInstallCommand(), newUninstallCommand(), newPrivilegedSetupCommand(),
-		newDaemonCommand(), newRestartCommand(), newStatusCommand(), newLogsCommand(), newVersionCommand(),
+		newDaemonCommand(), newRestartCommand(), newStatusCommand(), newLogsCommand(), newVersionCommand(), newUpdateCommand(),
 		newSitesCommand(), newLinkCommand(), newUnlinkCommand(), newParkCommand(), newUnparkCommand(),
 		newSecureCommand(true), newSecureCommand(false), newDomainCommand(), newUseCommand(),
 		newIsolateCommand(), newUnisolateCommand(), newIsolatedCommand(), newPinCommand(), newUnpinCommand(),

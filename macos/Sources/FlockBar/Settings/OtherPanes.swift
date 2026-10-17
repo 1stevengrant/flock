@@ -151,7 +151,7 @@ struct AboutPane: View {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
                     Text("App").foregroundStyle(.secondary)
-                    Text(appVersion)
+                    Text(Updater.appVersion)
                 }
                 GridRow {
                     Text("Daemon").foregroundStyle(.secondary)
@@ -179,11 +179,6 @@ struct AboutPane: View {
         .sheet(isPresented: uninstallingState.projectedValue) {
             UninstallSheet()
         }
-    }
-
-    private var appVersion: String {
-        let info = Bundle.main.infoDictionary
-        return info?["CFBundleShortVersionString"] as? String ?? info?["CFBundleVersion"] as? String ?? "dev"
     }
 }
 

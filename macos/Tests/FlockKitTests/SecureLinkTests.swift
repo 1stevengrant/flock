@@ -22,6 +22,9 @@ import Testing
 
     #expect(link("flock://secure/watchtower") == .secure(SecureLink(site: "watchtower")))
     #expect(link("flock://install/mysql") == .install(InstallLink(service: "mysql")))
+    #expect(link("flock://update") == .update)
+    #expect(link("flock://update/") == .update)
+    #expect(link("flock://update/now") == nil)
     #expect(link("flock://uninstall/mysql") == nil)
 }
 

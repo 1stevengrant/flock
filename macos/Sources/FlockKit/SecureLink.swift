@@ -72,12 +72,16 @@ extension SecureLink.Resolution {
 public enum FlockLink: Equatable, Sendable {
     case install(InstallLink)
     case secure(SecureLink)
+    /// `flock://update`, from `flock update`: check for a new version of the app.
+    case update
 
     public init?(url: URL) {
         if let link = InstallLink(url: url) {
             self = .install(link)
         } else if let link = SecureLink(url: url) {
             self = .secure(link)
+        } else if url.scheme?.lowercased() == "flock", url.host?.lowercased() == "update", url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty {
+            self = .update
         } else {
             return nil
         }

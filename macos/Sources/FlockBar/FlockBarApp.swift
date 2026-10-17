@@ -88,8 +88,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return pendingLink
     }
 
-    /// flock:// links (CFBundleURLTypes in build-app.sh), e.g. from the website's install buttons
-    /// or the page served for a site that isn't secured.
+    /// flock:// links (CFBundleURLTypes in build-app.sh), e.g. from the website's install buttons,
+    /// the page served for a site that isn't secured, or `flock update`.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let link = urls.lazy.compactMap(FlockLink.init(url:)).first else { return }
         Self.pendingLink = link
@@ -130,9 +130,13 @@ private struct MenuBarLabel: View {
         openWindow.activating(model.needsSetup ? WindowID.setup : WindowID.settings)
     }
 
-    /// Before the setup an install link waits: Services asks about it once Flock is set up.
+    /// Before the setup an install link waits: Services asks about it once Flock is set up. An
+    /// update link opens Settings only once Flock is set up; Sparkle's window shows the check.
     private func open(_ link: FlockLink) {
         model.handle(link)
+        if link == .update, model.needsSetup {
+            return
+        }
         openMain()
     }
 }

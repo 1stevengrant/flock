@@ -63,8 +63,9 @@ Type: files; Name: "{app}\Assets\FlockWarning.ico"
 Name: "{userprograms}\Flock"; Filename: "{app}\FlockTray.exe"
 
 [Registry]
-; The same value the app's "Open Flock at sign-in" setting writes (removed again on uninstall).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Flock"; ValueData: """{app}\FlockTray.exe"" --background"; Tasks: startup
+; The same value the app's "Open Flock at sign-in" setting writes (removed again on uninstall). Not
+; on the app's own updates (/RELAUNCH): they keep what the user set in the app.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Flock"; ValueData: """{app}\FlockTray.exe"" --background"; Tasks: startup; Check: not HasParam('/RELAUNCH')
 ; flock://install/<service>/<version> links from the website; the app asks before installing.
 Root: HKCU; Subkey: "Software\Classes\flock"; ValueType: string; ValueName: ""; ValueData: "URL:Flock"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\flock"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
@@ -73,6 +74,8 @@ Root: HKCU; Subkey: "Software\Classes\flock\shell\open\command"; ValueType: stri
 
 [Run]
 Filename: "{app}\FlockTray.exe"; Description: "Open Flock"; Flags: postinstall nowait skipifsilent
+; The app updates itself by running this installer silently with /RELAUNCH; it starts again quietly.
+Filename: "{app}\FlockTray.exe"; Parameters: "--background"; Flags: nowait; Check: HasParam('/RELAUNCH')
 
 [Code]
 // The running tray app locks its files; an update replaces them, and the new app starts afterwards.
@@ -88,6 +91,7 @@ end;
 
 // /PURGE: the app's uninstall dialog, when the user also wants their data deleted.
 // /SKIPFLOCK: `flock uninstall` started this uninstaller after removing Flock itself.
+// /RELAUNCH: the app's updater runs this installer (silently) and wants the app back afterwards.
 function HasParam(Name: String): Boolean;
 var
   I: Integer;

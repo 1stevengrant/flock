@@ -7,20 +7,43 @@
 # the app and disk image with it and the hardened runtime. With NOTARY_KEY_PATH (an App Store
 # Connect API key, .p8), NOTARY_KEY_ID and NOTARY_ISSUER_ID set too, the disk image is notarized
 # and stapled.
+#
+# Updates (Sparkle): the app checks the appcast in the "updates" release when it is a release build
+# (VERSION 1.2.3 or 1.2.3-beta.4) and SPARKLE_PUBLIC_KEY, the EdDSA key the updates are signed with,
+# is set. Other builds don't update.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
 OUT="../build/macos"
+FEED_URL="https://github.com/flock-php/flock/releases/download/updates/appcast.xml"
+
+# Sparkle compares CFBundleVersion: M.m.p.N, N the beta's number or 1000 for the release, so
+# 1.2.0-beta.3 (1.2.0.3) < 1.2.0 (1.2.0.1000) < 1.2.1-beta.1 (1.2.1.1). 0 for any other build.
+if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]]; then
+	BUILD="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[5]:-1000}"
+else
+	BUILD=0
+fi
+UPDATES=""
+if [[ "$BUILD" != 0 && -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
+	UPDATES="<key>SUFeedURL</key><string>${FEED_URL}</string>
+	<key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+	<key>SUEnableAutomaticChecks</key><true/>"
+fi
 
 # Apple silicon only: Flock doesn't support Intel Macs, and an arm64-only app won't open on one.
 ARCHS=(--arch arm64)
 swift build -c release --product FlockBar "${ARCHS[@]}"
 
 APP="$OUT/Flock.app"
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$(swift build -c release "${ARCHS[@]}" --show-bin-path)/FlockBar" "$APP/Contents/MacOS/FlockBar"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+cp "$BIN/FlockBar" "$APP/Contents/MacOS/FlockBar"
+# Sparkle, where the executable looks for it in an app bundle.
+ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/FlockBar"
 # The app icon and the menu bar's logomark, rendered by design/icongen.
 cp Resources/AppIcon.icns Resources/MenuBar*.png Resources/LogoMark*.png "$APP/Contents/Resources/"
 cp ../LICENSE ../NOTICE ../THIRD_PARTY_NOTICES "$APP/Contents/Resources/"
@@ -41,7 +64,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>${VERSION}</string>
-	<key>CFBundleVersion</key><string>${VERSION}</string>
+	<key>CFBundleVersion</key><string>${BUILD}</string>
+	${UPDATES}
 	<key>NSHumanReadableCopyright</key><string>Copyright © Guava s.r.o.</string>
 	<key>LSMinimumSystemVersion</key><string>15.0</string>
 	<key>LSUIElement</key><true/>
@@ -66,7 +90,14 @@ if [[ "$SIGN_IDENTITY" != - ]]; then
 	SIGN+=(--options runtime --timestamp)
 fi
 
-# Nested code first: the app's signature covers the CLI's.
+# Nested code first: the app's signature covers Sparkle's and the CLI's. Sparkle's helpers are
+# signed one by one, innermost first, as its documentation describes for builds without Xcode.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+"${SIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
+"${SIGN[@]}" --preserve-metadata=entitlements "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
+"${SIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
+"${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
+"${SIGN[@]}" "$SPARKLE"
 "${SIGN[@]}" "$APP/Contents/MacOS/flock"
 "${SIGN[@]}" "$APP"
 codesign --verify --strict --deep "$APP"

@@ -537,7 +537,7 @@ func (c *Client) UnpinSite(ctx context.Context, name, tool string) (Status, erro
 func configView(root string, cfg *config.Config) ConfigView {
 	view := ConfigView{
 		TLD: cfg.TLD, DefaultPHP: cfg.DefaultPHP, DefaultNode: cfg.DefaultNode,
-		Xdebug: cfg.Xdebug, XdebugBreakpoints: cfg.XdebugBreakpoints, Dumps: cfg.Dumps, Channel: channelOf(cfg), Root: root, Ports: cfg.Ports,
+		Xdebug: cfg.Xdebug, XdebugBreakpoints: cfg.XdebugBreakpoints, Dumps: cfg.Dumps, Channel: ChannelOf(cfg), Root: root, Ports: cfg.Ports,
 		Parked: cfg.Parked, PHP: []PHPVersion{}, Node: []string{},
 	}
 	if view.Parked == nil {
@@ -561,8 +561,8 @@ func configView(root string, cfg *config.Config) ConfigView {
 	return view
 }
 
-// channelOf is the channel config.json follows ("stable" when it names none or an unknown one).
-func channelOf(cfg *config.Config) string {
+// ChannelOf is the channel config.json follows ("stable" when it names none or an unknown one).
+func ChannelOf(cfg *config.Config) string {
 	ch, err := binaries.ParseChannel(cfg.Channel)
 	if err != nil {
 		return string(binaries.Stable)

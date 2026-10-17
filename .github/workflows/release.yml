@@ -1,7 +1,12 @@
 # main (and maintenance branches like 1.x): release-please keeps a release PR open with the next
 # version and changelog from the conventional commits. "Merge when ready" puts it in the merge queue,
 # which builds and signs it (build.yml) and merges it only once those builds pass. Merging it tags
-# the release, and the merge queue's builds are attached to it, without building again.
+# the release, and the merge queue's builds are attached to it, without building again. Then the
+# release goes into the apps' update feed, and main is merged back into develop.
+#
+# Work happens on develop: betas are released from it (beta.yml), and a tested beta is brought to
+# main with promote.yml, which makes this release PR. main gets nothing else but hotfixes
+# (main-pr.yml checks where its PRs come from).
 #
 # Off while the repository is private: the merge queue and environments need a paid plan there.
 name: Release
@@ -89,10 +94,24 @@ jobs:
     needs: [release-please, find-builds, build]
     if: always() && needs.find-builds.result == 'success' && needs.build.result != 'failure' && needs.build.result != 'cancelled'
     runs-on: ubuntu-latest
+    # SPARKLE_PRIVATE_KEY, which signs the macOS update.
+    environment: release
     permissions:
       actions: read
       contents: write
+    concurrency:
+      # One writer of the update feed at a time (beta.yml writes it too).
+      group: update-feed
+      cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -111,3 +130,41 @@ jobs:
             [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
           done
           gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+
+      - uses: ./.github/actions/update-feed
+        with:
+          version: ${{ needs.release-please.outputs.version }}
+          notes: ${{ runner.temp }}/notes.md
+          private-key: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          token: ${{ github.token }}
+
+  # develop must contain everything main has: the release-please commit (CHANGELOG.md, the version)
+  # and any hotfix. A PR from main into develop merges itself, unless a hotfix conflicts with
+  # develop; then it waits for the conflict to be resolved by hand.
+  merge-back:
+    name: Merge main into develop
+    needs: [release-please, publish]
+    if: always() && needs.publish.result == 'success' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Open and merge
+        env:
+          # A PR opened with the default token wouldn't start develop's checks.
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head main --state open --json url --jq '.[0].url')
+          if [ -z "$pr" ]; then
+            pr=$(gh pr create --repo "$GITHUB_REPOSITORY" --base develop --head main \
+              --title "chore: merge $TAG into develop" \
+              --body "Brings $TAG (and any hotfix in it) into develop. Merges itself unless it conflicts; then resolve the conflict here.")
+          fi
+          # With a merge commit: develop keeps main's history, so the next merge doesn't conflict
+          # on the same changes again.
+          gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --merge --auto ||
+            gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --merge ||
+            echo "::warning::$pr could not be merged (a conflict?): resolve it by hand"
