@@ -25,6 +25,17 @@ struct SetupWindow: View {
         get { declinedState.wrappedValue }
         nonmutating set { declinedState.wrappedValue = newValue }
     }
+    /// Applied once setup succeeds; Settings → General changes it later.
+    private let launchAtLoginState = State<Bool>(initialValue: true)
+    private var launchAtLogin: Bool {
+        get { launchAtLoginState.wrappedValue }
+        nonmutating set { launchAtLoginState.wrappedValue = newValue }
+    }
+    private let loginProblemState = State<String?>(initialValue: nil)
+    private var loginProblem: String? {
+        get { loginProblemState.wrappedValue }
+        nonmutating set { loginProblemState.wrappedValue = newValue }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,9 +43,15 @@ struct SetupWindow: View {
             case .intro:
                 header("Welcome to Flock", "Flock runs your Laravel sites, PHP, mail and databases on this Mac. Setting it up takes a moment:")
                 Form {
-                    item("Runs in the background", "The Flock daemon serves your sites and services, and starts whenever you log in.", symbol: "server.rack")
-                    item("php, composer and node in your terminal", "Flock's versions come first on your PATH. Open a new terminal after setup.", symbol: "terminal")
-                    item("*.test sites with trusted HTTPS", "macOS asks for your password twice: once to resolve *.test through Flock (/etc/resolver), once to trust Flock's certificate.", symbol: "lock.fill")
+                    Section {
+                        item("Runs in the background", "The Flock daemon serves your sites and services, and starts whenever you log in.", symbol: "server.rack")
+                        item("php, composer and node in your terminal", "Flock's versions come first on your PATH. Open a new terminal after setup.", symbol: "terminal")
+                        item("*.test sites with trusted HTTPS", "macOS asks for your password twice: once to resolve *.test through Flock (/etc/resolver), once to trust Flock's certificate.", symbol: "lock.fill")
+                    }
+                    Section {
+                        Toggle("Open Flock’s menu bar app at login", isOn: Binding(get: { launchAtLogin }, set: { launchAtLogin = $0 }))
+                            .toggleStyle(.checkbox)
+                    }
                 }
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
@@ -55,6 +72,9 @@ struct SetupWindow: View {
                 header("Flock is ready", nil)
                 Form {
                     Section("Next steps") {
+                        if let loginProblem {
+                            item("Open Flock at login", loginProblem, symbol: "exclamationmark.triangle")
+                        }
                         item("Open a new terminal", "Terminals that were already open still have the old PATH.", symbol: "terminal")
                         item("Link a project", "In a Laravel project, run `flock link`: the site is then at http://<folder>.test. `flock secure` adds HTTPS.", symbol: "globe")
                         item("Install PHP", "Settings → PHP installs versions; running `php` in a terminal offers to install a missing one.", symbol: "chevron.left.forwardslash.chevron.right")
@@ -103,6 +123,9 @@ struct SetupWindow: View {
         }
         output = result.output
         declined = result.permissionDeclined
+        if result.ok && launchAtLogin != LoginItem.isEnabled {
+            loginProblem = LoginItem.set(launchAtLogin)
+        }
         stage = result.ok ? .done : .failed
     }
 

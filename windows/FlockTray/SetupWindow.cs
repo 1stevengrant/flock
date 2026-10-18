@@ -14,7 +14,10 @@ internal sealed class SetupWindow : FlockWindow
 
     private readonly AppModel model;
     private readonly TextBlock log = Ui.MonoText("", 12);
+    // Applied once setup succeeds; Settings → General changes it later.
+    private readonly CheckBox startup = new() { Content = "Open Flock when I sign in", IsChecked = true, Margin = new Thickness(0, 12, 0, 0) };
     private string output = "";
+    private string? startupProblem;
 
     public SetupWindow(AppModel model) : base("Set up Flock", 620, 600, minWidth: 480, minHeight: 480)
     {
@@ -33,6 +36,7 @@ internal sealed class SetupWindow : FlockWindow
                     Ui.Setting("Runs in the background", "The Flock daemon serves your sites and services, and starts whenever you sign in.", null, Ui.GlyphServer),
                     Ui.Setting("php, composer and node in your terminal", "Flock's versions come first on your PATH. Open a new terminal after setup.", null, Ui.GlyphTerminal),
                     Ui.Setting("*.test sites with trusted HTTPS", "Windows asks once for administrator permission: for the small service that adds your sites to the hosts file, and to trust Flock's certificate.", null, Ui.GlyphLock)));
+                page.Children.Add(startup);
                 page.Children.Add(Buttons(
                     Ui.Button("Not now", Close),
                     Ui.Button("Set up Flock", () => _ = RunAsync(), accent: true)));
@@ -46,10 +50,17 @@ internal sealed class SetupWindow : FlockWindow
 
             case Stage.Done:
                 page.Children.Add(Header("Flock is ready", null));
-                page.Children.Add(Ui.Section("Next steps",
+                var steps = new List<UIElement>();
+                if (startupProblem is not null)
+                {
+                    steps.Add(Ui.Setting("Open Flock at sign-in", startupProblem, null, Ui.GlyphWarning));
+                }
+                steps.AddRange([
                     Ui.Setting("Open a new terminal", "Terminals that were already open still have the old PATH.", null, Ui.GlyphTerminal),
                     Ui.Setting("Link a project", "In a Laravel project, run `flock link`: the site is then at http://<folder>.test. `flock secure` adds HTTPS.", null, Ui.GlyphGlobe),
-                    Ui.Setting("Install PHP", "Settings → PHP installs versions; running `php` in a terminal offers to install a missing one.", null, Ui.GlyphCode)));
+                    Ui.Setting("Install PHP", "Settings → PHP installs versions; running `php` in a terminal offers to install a missing one.", null, Ui.GlyphCode),
+                ]);
+                page.Children.Add(Ui.Section("Next steps", [.. steps]));
                 page.Children.Add(Buttons(
                     Ui.Button("Open Settings", () =>
                     {
@@ -91,6 +102,14 @@ internal sealed class SetupWindow : FlockWindow
         if (result.Ok)
         {
             Installation.RecordInstalled();
+            try
+            {
+                Native.StartsAtSignIn = startup.IsChecked == true;
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+            {
+                startupProblem = $"Could not change the startup setting: {e.Message}. Settings → General has it too.";
+            }
         }
         Render(result.Ok ? Stage.Done : Stage.Failed);
         await model.RefreshAsync();
