@@ -10,6 +10,8 @@ struct SitesPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
     private let selectionState = State<Status.Site.ID?>(initialValue: nil)
+    /// Whether the list has the keyboard focus, so the arrow keys move through it.
+    private let listFocusState = FocusState<Bool>()
     private let confirmState = State<ConfirmAction?>(initialValue: nil)
     private var confirm: ConfirmAction? {
         get { confirmState.wrappedValue }
@@ -57,12 +59,18 @@ struct SitesPane: View {
                 // The sites in a list, the selected one's details beside it, as in Services.
                 let selected = sites.first { $0.id == selectionState.wrappedValue } ?? sites[0]
                 HStack(spacing: 0) {
-                    List(selection: Binding<Status.Site.ID?>(get: { selected.id }, set: { selectionState.wrappedValue = $0 })) {
+                    // The details are rebuilt for each site, which takes the focus off the list; it is
+                    // given back so the arrow keys keep moving through the sites.
+                    List(selection: Binding<Status.Site.ID?>(get: { selected.id }, set: {
+                        selectionState.wrappedValue = $0
+                        listFocusState.wrappedValue = true
+                    })) {
                         ForEach(sites) { site in
                             siteRow(site).tag(site.id)
                         }
                     }
                     .listStyle(.inset)
+                    .focused(listFocusState.projectedValue)
                     .frame(width: 230)
 
                     Divider()
