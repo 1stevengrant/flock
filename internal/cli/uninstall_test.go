@@ -98,3 +98,23 @@ func TestUninstallPurgeOnlyDeletesWhatFlockKnows(t *testing.T) {
 		t.Fatalf("left %v", got)
 	}
 }
+
+// Finder's .DS_Store (Explorer's Thumbs.db, desktop.ini) doesn't keep the data dir around.
+func TestUninstallPurgeRemovesTheDataDir(t *testing.T) {
+	root, _ := fakeRoot(t)
+	if err := os.Remove(filepath.Join(root, "notes.txt")); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range clutter {
+		if err := os.WriteFile(filepath.Join(root, f), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := cleanUp(root, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("the data dir must be removed, left %v", remaining(t, root))
+	}
+}
