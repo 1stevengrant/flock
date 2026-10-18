@@ -132,10 +132,24 @@ public sealed class Updater(Func<bool> takesBetas, Action changed)
 
             State = Phase.Installing;
             changed();
-            // Per-user, so no UAC prompt. It stops this app, replaces it and starts the new one in
-            // the background (/RELAUNCH); the new app then updates the CLI and restarts the daemon.
-            Process.Start(new ProcessStartInfo(installer, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH") { UseShellExecute = true });
-            App.Current.Quit();
+            // Per-user. It first has the new CLI update what needs administrator rights (a UAC
+            // prompt, only when one of them changed), then stops this app, replaces it and starts
+            // the new one in the background (/RELAUNCH); the new app then updates the CLI and
+            // restarts the daemon. Setup only ends while this app runs when it stopped before
+            // replacing anything, e.g. because the user declined the prompt; it says why in result.
+            var result = installer + ".result.txt";
+            File.Delete(result);
+            using var setup = Process.Start(new ProcessStartInfo(installer, $"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH \"/RESULT={result}\"") { UseShellExecute = true })!;
+            await setup.WaitForExitAsync();
+            if (setup.ExitCode == 0)
+            {
+                App.Current.Quit();
+                return;
+            }
+            Error = File.Exists(result) ? File.ReadAllText(result).Trim() : $"The update was not installed (setup exited with code {setup.ExitCode}).";
+            State = Phase.Idle;
+            changed();
+            Native.ShowError($"Flock was not updated to {update.Version}", Error);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException
                                       or InvalidDataException or System.ComponentModel.Win32Exception or CryptographicException)

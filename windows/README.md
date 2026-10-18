@@ -37,8 +37,11 @@ Running and publishing it needs Windows (the Windows App SDK's packaging tools a
 | CA trusted in the System keychain | CA added to the machine's Trusted Root store (`certutil -addstore Root`). PHP gets a bundle of the Windows root store + Flock's CA. |
 
 `flock install` asks for administrator rights once (UAC), for the hosts helper, the NRPT rule and the
-CA. It asks again only when the helper is outdated (after updating Flock), the rule is missing, or
-either is set up for another TLD.
+CA. It asks again only when the helper's revision changed (`hosts.HelperRevision`, raised with
+changes to the helper, not with every release), the rule is missing, or either is set up for
+another TLD. It asks before replacing anything: declining leaves the installed version as it was.
+Updates do the same: the installer runs the new `flock.exe install --privileged-only` before it
+replaces the app, and stops when the prompt is declined.
 
 Everything comes from the binaries manifest of the configured channel (stable, beta), verified by
 SHA-256 against a signed list — nothing is built on the machine:
