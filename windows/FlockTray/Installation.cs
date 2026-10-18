@@ -65,10 +65,14 @@ public static class Installation
         }
     }
 
-    /// <summary>Remembers the CLI this app installed, so later updates can tell it from a hand-installed one.</summary>
+    /// <summary>
+    /// Remembers the CLI this app installed, so later updates can tell it from a hand-installed one.
+    /// After every `flock install`, also a failed one: it copies the CLI first, so one that failed
+    /// later (e.g. at a declined UAC prompt) still installed it.
+    /// </summary>
     public static void RecordInstalled()
     {
-        if (File.Exists(FlockPaths.FlockBinary))
+        if (BundledFlock is { } bundled && File.Exists(FlockPaths.FlockBinary) && Hash(FlockPaths.FlockBinary) == Hash(bundled))
         {
             Preferences.Shared.InstalledFlock = Hash(FlockPaths.FlockBinary);
             Preferences.Shared.Save();

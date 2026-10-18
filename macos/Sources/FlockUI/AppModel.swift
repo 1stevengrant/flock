@@ -224,9 +224,8 @@ final class AppModel {
         isUpdating = true
         let result = await installation.install()
         isUpdating = false
-        if result.ok {
-            recordInstalled()
-        } else {
+        recordInstalled()
+        if !result.ok {
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = "Flock could not update"
@@ -243,8 +242,8 @@ final class AppModel {
         let result = await installation.install(onLine: onLine)
         isSettingUp = false
         needsSetup = installation.needsSetup
+        recordInstalled()
         if result.ok {
-            recordInstalled()
             actionError = nil
         }
         await refresh()
@@ -263,8 +262,14 @@ final class AppModel {
     }
 
     /// Remembers the CLI this app installed, so later updates can tell it from a hand-installed one.
+    /// After every `flock install`, also a failed one: it copies the CLI first, so one that failed
+    /// later (e.g. at a declined password prompt) still installed it.
     private func recordInstalled() {
-        UserDefaults.standard.set(Installation.hash(installation.installedFlock), forKey: Self.installedFlockKey)
+        guard let bundled = installation.bundledFlock else { return }
+        let installed = Installation.hash(installation.installedFlock)
+        if !installed.isEmpty, installed == Installation.hash(bundled) {
+            UserDefaults.standard.set(installed, forKey: Self.installedFlockKey)
+        }
     }
 
     /// Runs `flock uninstall --keep-app` (the app removes itself afterwards, see removeApp);

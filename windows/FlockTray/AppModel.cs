@@ -75,10 +75,7 @@ public sealed class AppModel
         {
             var result = await Installation.InstallAsync(onLine);
             NeedsSetup = !Installation.IsSetUp;
-            if (result.Ok)
-            {
-                Installation.RecordInstalled();
-            }
+            Installation.RecordInstalled();
             return result;
         }
         finally
@@ -117,11 +114,8 @@ public sealed class AppModel
         Changed?.Invoke();
         var result = await Installation.InstallAsync();
         IsUpdating = false;
-        if (result.Ok)
-        {
-            Installation.RecordInstalled();
-        }
-        else
+        Installation.RecordInstalled();
+        if (!result.Ok)
         {
             App.Log(new InvalidOperationException("flock install (update) failed:\n" + result.Output));
             Native.ShowError("Flock could not update", $"{result.Output}\n\nYou can run `flock install` in a terminal, or reinstall Flock.");
