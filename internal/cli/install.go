@@ -20,7 +20,7 @@ import (
 const composerURL = "https://getcomposer.org/download/latest-stable/composer.phar"
 
 func newInstallCommand() *cobra.Command {
-	var skipPrivileged bool
+	var skipPrivileged, privilegedOnly bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -31,12 +31,33 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// With privilegedFirst, the steps that need an administrator come before anything is
+			// replaced: declining them leaves the installed version as it was.
+			var ca *certs.CA
+			if privilegedFirst {
+				if ca, err = ensureCA(cmd, s); err != nil {
+					return err
+				}
+				if !skipPrivileged {
+					if err := ensurePrivileged(cmd, s, "", ca); err != nil {
+						return err
+					}
+				}
+				if privilegedOnly {
+					return nil
+				}
+			}
+
 			if err := s.cfg.Save(s.root); err != nil {
 				return err
 			}
 
 			bin, err := installBinary(s.root)
 			if err != nil {
+				return fmt.Errorf("install flock binary: %w", err)
+			}
+			if err := installHelperBinary(bin); err != nil {
 				return fmt.Errorf("install flock binary: %w", err)
 			}
 			cmd.Printf("✓ flock binary → %s\n", bin)
@@ -51,11 +72,11 @@ func newInstallCommand() *cobra.Command {
 			}
 			cmd.Println("✓ composer")
 
-			ca, err := certs.Ensure(filepath.Join(s.root, "certs"), s.cfg.TLD)
-			if err != nil {
-				return err
+			if !privilegedFirst {
+				if ca, err = ensureCA(cmd, s); err != nil {
+					return err
+				}
 			}
-			cmd.Printf("✓ local certificate authority (%s)\n", ca.Fingerprint())
 
 			// Flock's shims first, then the commands of the default Node.js version's global packages.
 			if err := addToShellPath(filepath.Join(s.root, "bin"), node.GlobalBin(node.CurrentGlobalDir(s.root))); err != nil {
@@ -70,7 +91,7 @@ func newInstallCommand() *cobra.Command {
 			}
 			cmd.Println("✓ daemon runs in the background and starts at login")
 
-			if skipPrivileged {
+			if skipPrivileged || privilegedFirst {
 				return nil
 			}
 			if err := ensurePrivileged(cmd, s, bin, ca); err != nil {
@@ -87,7 +108,22 @@ func newInstallCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&skipPrivileged, "skip-privileged", false, "skip the steps that need an administrator password")
+	if privilegedFirst {
+		// The installer checks these before it replaces the app (see windows/installer/Flock.iss).
+		cmd.Flags().BoolVar(&privilegedOnly, "privileged-only", false, "only the steps that need an administrator")
+		_ = cmd.Flags().MarkHidden("privileged-only")
+	}
 	return cmd
+}
+
+// ensureCA creates Flock's certificate authority unless it exists.
+func ensureCA(cmd *cobra.Command, s *state) (*certs.CA, error) {
+	ca, err := certs.Ensure(filepath.Join(s.root, "certs"), s.cfg.TLD)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Printf("✓ local certificate authority (%s)\n", ca.Fingerprint())
+	return ca, nil
 }
 
 // installBinary copies the running flock executable to <root>/bin so the shims and the service

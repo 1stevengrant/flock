@@ -232,6 +232,12 @@ func uninstallService() error {
 	return nil
 }
 
+// privilegedFirst: `flock install` runs ensurePrivileged last, as the installed flock binary.
+const privilegedFirst = false
+
+// installHelperBinary: macOS has no hosts helper.
+func installHelperBinary(string) error { return nil }
+
 // ensurePrivileged checks the resolver file and the CA's trust and fixes what is missing: the
 // resolver file as root (re-running flock under sudo), the trust as the user (see trustCA).
 func ensurePrivileged(cmd *cobra.Command, s *state, bin string, ca *certs.CA) error {

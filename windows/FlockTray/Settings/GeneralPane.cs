@@ -106,12 +106,76 @@ internal sealed class GeneralPane(SettingsWindow window, AppModel model) : Pane(
             : Ui.Button("Check for Updates", () => _ = updater.CheckAsync(userInitiated: true));
         button.IsEnabled = idle;
         var control = idle ? (UIElement)button : Ui.Row(12, new ProgressRing { Width = 16, Height = 16 }, button);
-        if (updater.Available is { NotesUrl: { } notes } && idle)
+        if (updater.Available is { } available && (available.Notes.Length > 0 || available.NotesUrl is not null) && idle)
         {
-            control = Ui.Row(12, Ui.Link("Release Notes", () => Native.Open(notes)), button);
+            control = Ui.Row(12, Ui.Link("Release Notes", () =>
+            {
+                if (available.Notes.Length > 0)
+                {
+                    _ = ReleaseNotesAsync(available);
+                }
+                else
+                {
+                    Native.Open(available.NotesUrl!);
+                }
+            }), button);
         }
         return Ui.Setting("Flock", description, control);
     }
+
+    /// <summary>An update's release notes, like Sparkle's update window on macOS: install it from here, or read it on GitHub.</summary>
+    private async Task ReleaseNotesAsync(UpdateFeed.Item update)
+    {
+        var notes = new HtmlView(blockRemote: false) { Width = 500, Height = 380 };
+        notes.Load(ReleaseNotesPage(update.Notes));
+        var dialog = new ContentDialog
+        {
+            Title = $"Flock {update.Version}",
+            Content = notes,
+            PrimaryButtonText = $"Update to {update.Version}",
+            SecondaryButtonText = update.NotesUrl is null ? "" : "View on GitHub",
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Window.Content.XamlRoot,
+        };
+        // Wide enough for the notes; the default caps the dialog at 548 pixels.
+        dialog.Resources["ContentDialogMaxWidth"] = 600.0;
+        switch (await dialog.ShowAsync())
+        {
+            case ContentDialogResult.Primary:
+                await Model.Updater.InstallAsync();
+                break;
+            case ContentDialogResult.Secondary:
+                Native.Open(update.NotesUrl!);
+                break;
+        }
+    }
+
+    /// <summary>The feed's notes (GitHub-rendered markdown) as a page that matches the app in both themes.</summary>
+    private static string ReleaseNotesPage(string notes) => $$"""
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <style>
+        :root { color-scheme: light dark; color: #1b1b1b; }
+        @media (prefers-color-scheme: dark) { :root { color: #ffffff; } a { color: #99ebff; } }
+        html, body { background: transparent; }
+        body { margin: 0; font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+        a { color: #005fb8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        h1, h2, h3 { font-weight: 600; margin: 1em 0 .4em; }
+        h1 { font-size: 20px; } h2 { font-size: 17px; } h3 { font-size: 15px; }
+        body > :first-child { margin-top: 0; }
+        ul, ol { padding-left: 1.4em; }
+        li { margin: .2em 0; }
+        code { font: 12px Consolas, monospace; padding: .1em .3em; border-radius: 3px; background: rgba(128, 128, 128, .18); }
+        img { max-width: 100%; }
+        </style>
+        </head>
+        <body>{{notes}}</body>
+        </html>
+        """;
 
     private StackPanel Parked(FlockConfig config)
     {
