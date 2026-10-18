@@ -22,6 +22,13 @@ dotnet publish (Join-Path $PSScriptRoot "FlockTray\FlockTray.csproj") -c Release
     "-p:InformationalVersion=$version" -o $out
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# FlockScreenshots compiles the same sources with SCREENSHOTS defined (demo data, a fake daemon);
+# none of that may reach the shipped app.
+if (Select-String -Path (Join-Path $out "FlockTray.dll") -Pattern "Screenshots", "FakeDaemon" -SimpleMatch -Quiet) {
+    Write-Error "FlockTray.dll contains screenshot code: was it built with SCREENSHOTS defined?"
+    exit 1
+}
+
 # Ours; the .NET and Windows App SDK files come signed by Microsoft.
 if ($env:SIGN_METADATA) {
     $unsigned = Get-ChildItem $out -Recurse -Include *.exe, *.dll |

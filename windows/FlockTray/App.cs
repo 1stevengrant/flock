@@ -26,6 +26,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
     public App()
     {
+#if SCREENSHOTS
+        RequestedTheme = Screenshots.Current.Theme;
+#endif
         UnhandledException += (_, e) =>
         {
             // A tray app must not disappear because one view failed; keep a trace for bug reports.
@@ -46,6 +49,12 @@ public sealed partial class App : Application, IXamlMetadataProvider
         {
             Resources.MergedDictionaries.Add(new XamlControlsResources());
             DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+#if SCREENSHOTS
+            if (Screenshots.Current.Start(this))
+            {
+                return;
+            }
+#endif
 
             tray = new Native.TrayIcon(IconPath(), "Flock");
             tray.Clicked += TogglePanel;

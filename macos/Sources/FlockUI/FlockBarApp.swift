@@ -5,7 +5,7 @@ import SwiftUI
 /// Note on `State`: with only the Command Line Tools installed, `@State` cannot be used —
 /// the macOS SDK expands it as a macro whose plugin ships with Xcode only. The property
 /// wrapper type itself works, so views declare `State` values explicitly instead.
-struct FlockBarApp: App {
+public struct FlockBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let modelState = State<AppModel>(initialValue: AppModel())
     private var model: AppModel {
@@ -13,7 +13,9 @@ struct FlockBarApp: App {
         nonmutating set { modelState.wrappedValue = newValue }
     }
 
-    var body: some Scene {
+    public init() {}
+
+    public var body: some Scene {
         MenuBarExtra {
             PanelView()
                 .environment(model)
@@ -97,9 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The menu bar icon. It is the only view that exists at launch, so it also opens the
-/// window requested by `--snapshot`, the main window when started by hand, and Settings →
-/// Services (or PHP, Node) or Sites for a flock:// link.
+/// The menu bar icon. It is the only view that exists at launch, so it also opens the main
+/// window when started by hand, and Settings → Services (or PHP, Node) or Sites for a flock:// link.
 private struct MenuBarLabel: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -107,9 +108,7 @@ private struct MenuBarLabel: View {
     var body: some View {
         LogoMark(mode: model.logoMark)
             .task {
-                if let target = Snapshot.target {
-                    openWindow.activating(target)
-                } else if let link = AppDelegate.takePendingLink() {
+                if let link = AppDelegate.takePendingLink() {
                     open(link)
                 } else if !AppDelegate.launchedAtLogin {
                     openMain()

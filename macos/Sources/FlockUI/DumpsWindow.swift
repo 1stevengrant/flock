@@ -98,7 +98,6 @@ struct DumpsWindow: View {
                 ErrorBanner(message: store.error)
             }
         }
-        .task { await Snapshot.captureIfRequested(WindowID.dumps) }
         .task {
             store.isVisible = true
             await store.refresh()

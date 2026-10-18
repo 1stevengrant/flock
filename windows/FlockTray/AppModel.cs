@@ -917,7 +917,12 @@ public sealed class Preferences
     /// <summary>The daemon's channel when last seen, for update checks while it isn't running.</summary>
     public string Channel { get; set; } = "stable";
 
+#if SCREENSHOTS
+    // The defaults, not this machine's choices.
+    private static string FilePath => Path.Combine(FlockPaths.Root, "tray.json");
+#else
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flock", "tray.json");
+#endif
 
     public static Preferences Shared { get; } = Load();
 

@@ -99,12 +99,8 @@ struct SettingsWindow: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 810, minHeight: 480)
-        .task { await Snapshot.captureIfRequested(WindowID.settings) }
         .task {
             store.isVisible = true
-            if Snapshot.isFixture {
-                SnapshotFixtures.load(into: store)
-            }
             await store.refresh()
         }
         .onDisappear { store.isVisible = false }
