@@ -42,6 +42,19 @@ struct PanelView: View {
         .frame(width: 340)
     }
 
+    /// Opens a window and closes the panel, which otherwise stays on top of it.
+    private func open(_ id: String) {
+        closePanel()
+        openWindow.activating(id)
+    }
+
+    /// MenuBarExtra has no API to close its panel; while it is used, it is the key window.
+    private func closePanel() {
+        if let panel = NSApp.keyWindow as? NSPanel {
+            panel.close()
+        }
+    }
+
     // MARK: Sections
 
     private var header: some View {
@@ -67,6 +80,7 @@ struct PanelView: View {
             Text("Flock \(version) is available").font(.callout)
             Spacer(minLength: 0)
             Button("Update") {
+                closePanel()
                 model.updater.checkForUpdates()
             }
             .controlSize(.small)
@@ -152,7 +166,7 @@ struct PanelView: View {
                 Spacer()
                 Button("Install…") {
                     model.showSettings(.services, service: "postgres")
-                    openWindow.activating(WindowID.settings)
+                    open(WindowID.settings)
                 }
                 .buttonStyle(.link)
                 .font(.caption)
@@ -204,13 +218,13 @@ struct PanelView: View {
     private func shortcuts(_ status: Status) -> some View {
         HStack(spacing: 8) {
             ShortcutButton(title: "Mail", symbol: "envelope", count: status.mailCount) {
-                openWindow.activating(WindowID.mail)
+                open(WindowID.mail)
             }
             ShortcutButton(title: "Dumps", symbol: "ladybug.fill", count: status.dumpCount) {
-                openWindow.activating(WindowID.dumps)
+                open(WindowID.dumps)
             }
             ShortcutButton(title: "Logs", symbol: "doc.text.magnifyingglass", count: nil) {
-                openWindow.activating(WindowID.logs)
+                open(WindowID.logs)
             }
         }
     }
@@ -224,7 +238,7 @@ struct PanelView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Set Up Flock…") {
-                    openWindow.activating(WindowID.setup)
+                    open(WindowID.setup)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -251,7 +265,7 @@ struct PanelView: View {
                 }
                 .disabled(model.isRestarting || model.isUpdating || !model.isRunning)
                 Button("Settings…") {
-                    openWindow.activating(WindowID.settings)
+                    open(WindowID.settings)
                 }
                 .keyboardShortcut(",")
             }
