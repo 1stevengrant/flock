@@ -283,6 +283,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := d.reload(); err != nil {
 		d.setWarnings([]string{err.Error()})
 	}
+	// What the first reload served, taken before the API answers: a folder parked once a client
+	// can see the daemon is a change.
+	files := d.projectFiles()
 	// The first run installs the default PHP and Node.js once a manifest arrives (reload already
 	// started it from the cached one).
 	d.binaries.OnChange(d.ensureDefaults)
@@ -323,7 +326,6 @@ func Run(ctx context.Context, cfg Config) error {
 	// and the parked paths, so a new project folder is served as soon as it exists.
 	watch := time.NewTicker(projectWatchInterval)
 	defer watch.Stop()
-	files := d.projectFiles()
 	// Follow PhpStorm breakpoints, so a site switches to Xdebug as soon as one is set.
 	breakpoints := time.NewTicker(breakpointInterval)
 	defer breakpoints.Stop()
