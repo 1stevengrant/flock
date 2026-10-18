@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
-<title>{{html .Host}} · {{if placeholder "http.vars.flock_site"}}Not secured{{else}}Not linked{{end}} · Flock</title>
+<title>{{html .Host}} · {{if placeholder "http.vars.flock_php_state"}}Needs PHP{{else if placeholder "http.vars.flock_site"}}Not secured{{else}}Not linked{{end}} · Flock</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='11' fill='%230f172a'/%3E%3Cg fill='%23effcfd' transform='translate(1 0) scale(.9) translate(0 1)'%3E%3Ccircle cx='30.4' cy='13.8' r='4.8'/%3E%3Cpath d='M33.4 9.8Q40.2 6.2 46.6 5.8 41 8.4 35.2 13.2ZM29.4 30.6 45 19.6 31.4 25.4ZM25.6 17.4C23.6 25 21.4 30.6 19.4 35L15.8 39.8 21.2 41.6 22 38.6C26 35 29.2 30.8 31.8 24.4 33 21.4 33.6 18.8 33 16.8ZM24.55 18.36C24.27 15.27 21.69 13.44 19.47 13.19 15.28 10.45 8.88 7.47 3.75 5.07L7.19 12.76 8.69 16.9 11.07 20.5 14.25 23.39 18.3 25.75 25.3 29.79Z'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 /*
@@ -161,6 +161,13 @@ h1 {
 
 .lead { margin: 1.5rem auto 0; max-width: 38rem; font-size: 1.0625rem; line-height: 1.75rem; color: var(--muted); }
 .lead strong { color: var(--ink); font-weight: 600; }
+.lead code { padding: 0.05rem 0.3rem; border-radius: 0.25rem; background: var(--line); font-family: var(--mono); font-size: 0.84em; color: var(--ink); }
+
+/* While PHP is being installed: the page reloads into the site once it answers. */
+.waiting { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin: 2rem 0 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--muted); }
+.waiting::before { content: ''; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--signal); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .waiting::before { animation: none; } }
 
 .steps {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
@@ -229,6 +236,12 @@ footer code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-sof
 {{/* Set over HTTPS for a linked site that isn't secured: its name. */}}
 {{$site := placeholder "http.vars.flock_site"}}
 {{$name := first (splitList "." .Host)}}
+{{/* Set for a linked site whose PHP isn't installed: its name, the version, the state (installing,
+     missing or unavailable) and the project file that pins the version, if one does. */}}
+{{$phpState := placeholder "http.vars.flock_php_state"}}
+{{$phpSite := placeholder "http.vars.flock_php_site"}}
+{{$php := placeholder "http.vars.flock_php"}}
+{{$phpFile := placeholder "http.vars.flock_php_file"}}
 <div class="glows" aria-hidden="true">
     <div class="glow teal"></div>
     <div class="glow ember"></div>
@@ -279,7 +292,28 @@ footer code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-sof
 
     <section class="hero">
         <div class="wrap">
-{{if $site}}
+{{if eq $phpState "installing"}}
+            <div class="eyebrow">Installing PHP</div>
+            <h1>PHP is on its way.</h1>
+            <div class="host"><span class="scheme">{{if .Req.TLS}}https{{else}}http{{end}}://</span><span class="name">{{html .Host}}</span><span class="code">404</span></div>
+            <p class="lead">
+                <strong>{{html $phpSite}}</strong> is linked. Flock is installing PHP{{if $php}} {{html $php}}{{end}} for it right now,
+                and this page shows the site as soon as it&rsquo;s ready.
+            </p>
+            <p class="waiting" data-wait>Waiting for PHP&hellip;</p>
+{{else if $phpState}}
+            <div class="eyebrow">Needs PHP</div>
+            <h1>{{if eq $phpState "unavailable"}}This PHP isn&rsquo;t available here.{{else}}PHP {{html $php}} isn&rsquo;t installed yet.{{end}}</h1>
+            <div class="host"><span class="scheme">{{if .Req.TLS}}https{{else}}http{{end}}://</span><span class="name">{{html .Host}}</span><span class="code">404</span></div>
+            <p class="lead">
+                <strong>{{html $phpSite}}</strong> is linked and runs on PHP {{html $php}}{{if $phpFile}}, pinned in <code>{{html $phpFile}}</code>{{end}}.
+{{if eq $phpState "unavailable"}}
+                Flock has no build of PHP {{html $php}} for this computer, so pick a version it offers.
+{{else}}
+                Install it and the site is served here right away.
+{{end}}
+            </p>
+{{else if $site}}
             <div class="eyebrow">Not secured</div>
             <h1>Nothing is served securely here yet.</h1>
             <div class="host"><span class="scheme">https://</span><span class="name">{{html .Host}}</span><span class="code">404</span></div>
@@ -297,6 +331,44 @@ footer code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-sof
             </p>
 {{end}}
 
+{{if eq $phpState "installing"}}
+{{else if eq $phpState "missing"}}
+            <div class="steps">
+                <div class="panel primary">
+                    <span class="label">01 &middot; Install it in Flock</span>
+                    <h2>Install PHP {{html $php}}</h2>
+                    <p>Flock asks before it installs anything, and this page shows the site once PHP is ready. Or install it in Settings &rarr; PHP.</p>
+                    <a class="action" href="flock://install/php/{{html $php}}" data-wait>Install PHP {{html $php}}</a>
+                </div>
+                <div class="panel">
+                    <span class="label">02 &middot; Prefer the terminal?</span>
+                    <h2>Install it from there</h2>
+                    <p>Downloads the newest release of PHP {{html $php}} and serves the site with it.</p>
+                    <div class="code-block">
+                        <pre><code><span class="line">flock php install {{html $php}}</span></code></pre>
+                        <button type="button">copy</button>
+                    </div>
+                </div>
+            </div>
+{{else if $phpState}}
+            <div class="steps">
+                <div class="panel primary">
+                    <span class="label">01 &middot; Pick another version</span>
+                    <h2>{{if $phpFile}}Pin one Flock offers{{else}}Run it on another PHP{{end}}</h2>
+                    <p>Run this in the project&rsquo;s directory with a version from <code>flock php list</code>.</p>
+                    <div class="code-block">
+                        <pre><code><span class="line">{{if $phpFile}}flock pin php &lt;version&gt;{{else}}flock isolate php &lt;version&gt;{{end}}</span></code></pre>
+                        <button type="button">copy</button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <span class="label">02 &middot; Prefer the app?</span>
+                    <h2>Pick it in Settings</h2>
+                    <p>Choose the PHP version for the site, and this page shows the site once it runs.</p>
+                    <div class="crumbs"><span>Settings</span><b>&rarr;</b><span>Sites</span></div>
+                </div>
+            </div>
+{{else}}
             <div class="steps">
 {{if $site}}
                 <div class="panel primary">
@@ -312,7 +384,7 @@ footer code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-sof
                     <span class="label">02 &middot; Prefer the app?</span>
                     <h2>Secure it in Flock</h2>
                     <p>Flock asks before it changes anything, and this page shows the site once it&rsquo;s secured. Or turn on HTTPS in Settings &rarr; Sites.</p>
-                    <a class="action" href="flock://secure/{{html $site}}" data-secure>Secure in Flock</a>
+                    <a class="action" href="flock://secure/{{html $site}}" data-wait>Secure in Flock</a>
                 </div>
 {{else}}
                 <div class="panel primary">
@@ -342,6 +414,7 @@ footer code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-sof
                 </div>
 {{end}}
             </div>
+{{end}}
         </div>
     </section>
 </main>
@@ -379,27 +452,32 @@ document.querySelectorAll('.code-block button').forEach(function (button) {
     });
 });
 
-// After "Secure in Flock", check every 2 seconds (for up to 5 minutes) whether the site answers
-// instead of this page, and show it once it does.
-document.querySelectorAll('[data-secure]').forEach(function (link) {
-    var waiting = false;
+// Check every 2 seconds (for up to 10 minutes) whether the site answers instead of this page, and
+// show it once it does: right away while PHP is being installed, after a click on a button that
+// opens the app (Secure in Flock, Install PHP).
+var waiting = false;
+var wait = function () {
+    if (waiting) return;
+    waiting = true;
+    var tries = 0;
+    var again = function () {
+        if (++tries < 300) setTimeout(check, 2000);
+    };
+    var check = function () {
+        fetch(location.href, { method: 'HEAD', cache: 'no-store' }).then(function (response) {
+            if (response.headers.get('X-Flock-Page')) return again();
+            location.reload();
+        }, again);
+    };
+    again();
+};
+document.querySelectorAll('a[data-wait]').forEach(function (link) {
     link.addEventListener('click', function () {
-        if (waiting) return;
-        waiting = true;
         link.textContent = 'Waiting for Flock…';
-        var tries = 0;
-        var again = function () {
-            if (++tries < 150) setTimeout(check, 2000);
-        };
-        var check = function () {
-            fetch(location.href, { method: 'HEAD', cache: 'no-store' }).then(function (response) {
-                if (response.headers.get('X-Flock-Page')) return again();
-                location.reload();
-            }, again);
-        };
-        again();
+        wait();
     });
 });
+if (document.querySelector('p[data-wait]')) wait();
 </script>
 </body>
 </html>

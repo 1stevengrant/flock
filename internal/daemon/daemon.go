@@ -88,6 +88,8 @@ type daemon struct {
 	breakpointSites map[string]bool
 	cfg             *config.Config
 	wildcard        wildcardState
+
+	defaults defaults // the first run's default PHP and Node.js
 }
 
 func (d *daemon) shutdown() {
@@ -240,7 +242,10 @@ func Run(ctx context.Context, cfg Config) error {
 	d.pg = postgres.NewManager(cfg.Root, d.binaries, pgService{d})
 	d.php = php.NewManager(cfg.Root, d.binaries)
 	d.php.Release = d.ReleasePHP
-	d.php.Finished = func(string) { _ = d.reload() }
+	d.php.Finished = func(string) {
+		_ = d.reload()
+		d.ensureDefaults()
+	}
 	go d.php.Run(ctx)
 	d.frankenphp = frankenphp.NewManager(cfg.Root, d.binaries)
 	d.frankenphp.Release = d.releaseFrankenPHP
@@ -254,6 +259,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := d.reload(); err != nil {
 		d.setWarnings([]string{err.Error()})
 	}
+	// The first run installs the default PHP and Node.js once a manifest arrives (reload already
+	// started it from the cached one).
+	d.binaries.OnChange(d.ensureDefaults)
 
 	ln, err := net.Listen("unix", socket)
 	if err != nil {
@@ -456,6 +464,7 @@ func (d *daemon) reload() error {
 	var (
 		statuses    []api.SiteStatus
 		webSites    []web.Site
+		waiting     []web.Waiting // sites whose PHP isn't installed
 		domains     []string
 		keep        = map[string]bool{}
 		pools       = map[string][]string{} // version → FastCGI upstreams
@@ -540,11 +549,12 @@ func (d *daemon) reload() error {
 			status.Domains = append(status.Domains, sd)
 		}
 
-		if !contains(installed, version) {
-			status.Problem = fmt.Sprintf("PHP %s is not installed", version)
-			if phpVersion.Source == project.Project {
-				status.Problem = fmt.Sprintf("PHP %s (pinned in %s) is not installed", version, filepath.Base(phpVersion.File))
-			}
+		if version == "" || !contains(installed, version) {
+			// Its names get a page that says what's missing instead of the site (see web.Waiting).
+			w := d.waitingFor(site, phpVersion, domain, aliases)
+			status.Problem = waitingProblem(w)
+			waiting = append(waiting, w)
+			domains = append(append(domains, domain), served...)
 			statuses = append(statuses, status)
 			continue
 		}
@@ -665,7 +675,7 @@ func (d *daemon) reload() error {
 		bind = ""
 	}
 
-	if err := d.applyWeb(cfg, bind, webSites, ca); err != nil {
+	if err := d.applyWeb(cfg, bind, webSites, waiting, ca); err != nil {
 		warnings = append(warnings, "web: "+err.Error())
 	}
 
@@ -674,12 +684,16 @@ func (d *daemon) reload() error {
 	d.mu.Unlock()
 
 	go d.checkWildcard()
+	// Until there are defaults: one may be installed now (the first run's, or one the user installed).
+	if cfg.DefaultPHP == "" || cfg.DefaultNode == "" {
+		go d.ensureDefaults()
+	}
 	return nil
 }
 
 // applyWeb (re)configures Caddy. Before the first successful start it checks the ports itself,
 // because Caddy's own error does not say who holds them.
-func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, ca *certs.CA) error {
+func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, waiting []web.Waiting, ca *certs.CA) error {
 	owned := map[int]bool{}
 	if d.webUp && d.cfg != nil {
 		owned[d.cfg.Ports.HTTP], owned[d.cfg.Ports.HTTPS] = true, true
@@ -697,6 +711,7 @@ func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, ca 
 		HTTPSPort:  cfg.Ports.HTTPS,
 		Bind:       bind,
 		Sites:      sites,
+		Waiting:    waiting,
 		TLD:        cfg.TLD,
 		Issue:      func(name string) (*tls.Certificate, error) { return d.leaves.Get(ca, name) },
 	})
@@ -835,6 +850,7 @@ func (d *daemon) Status() api.Status {
 		st.Xdebug, st.XdebugBreakpoints = d.cfg.Xdebug, d.cfg.XdebugBreakpoints
 		st.Channel = api.ChannelOf(d.cfg)
 		st.Dumps = d.cfg.Dumps
+		st.Defaults = d.defaultsStatus(d.cfg)
 
 		// Without the helper, sites resolve only through the DNS rule: say so when that fails too.
 		if runtime.GOOS == "windows" && d.wildcard.problem != "" && hosts.Blocked(d.root) && !hosts.HelperStatus().Installed {

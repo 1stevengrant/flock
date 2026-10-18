@@ -99,6 +99,7 @@ type Entry struct {
 	Size       int64             `json:"size"`
 	Published  time.Time         `json:"published"`
 	Prerelease bool              `json:"prerelease,omitempty"`
+	LTS        bool              `json:"lts,omitempty"` // Node.js: a long-term support release
 	Yanked     map[string]string `json:"yanked,omitempty"`
 }
 
