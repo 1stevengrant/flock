@@ -93,7 +93,7 @@ final class AppModel {
 
     /// The logomark for the daemon's state: stopped is dimmed, a warning adds a badge.
     var logoMark: LogoMark.Mode {
-        guard isRunning else { return .stopped }
+        guard isRunning, !needsSetup else { return .stopped }
         return isDegraded ? .warning : .running
     }
 
@@ -102,10 +102,14 @@ final class AppModel {
         if isUpdating {
             return "Updating…"
         }
+        // Before the setup is done, a daemon that answers is the setup's (it may still fail).
+        if needsSetup {
+            return "Not set up"
+        }
         if let status {
             return "\(status.isDegraded ? "Needs attention" : "Running") · v\(status.version)"
         }
-        return needsSetup ? "Not set up" : "Not running"
+        return "Not running"
     }
 
     private func startPolling() {
@@ -222,7 +226,9 @@ final class AppModel {
 
     /// Runs the bundled `flock install` for the setup window.
     func install(onLine: @escaping @Sendable (String) -> Void) async -> Installation.Result {
+        isSettingUp = true
         let result = await installation.install(onLine: onLine)
+        isSettingUp = false
         needsSetup = installation.needsSetup
         if result.ok {
             recordInstalled()
@@ -230,6 +236,17 @@ final class AppModel {
         }
         await refresh()
         return result
+    }
+
+    /// The setup window runs `flock install`, which registers and starts the daemon before its last steps.
+    @ObservationIgnored private var isSettingUp = false
+
+    /// Reads again whether Flock is set up, when the panel opens: `flock install` or `flock uninstall`
+    /// in a terminal changes it while the app runs. Not during the app's own setup or update, which
+    /// register the daemon before they are done.
+    func refreshSetup() {
+        guard !isSettingUp, !isUpdating, installation.needsSetup != needsSetup else { return }
+        needsSetup = installation.needsSetup
     }
 
     /// Remembers the CLI this app installed, so later updates can tell it from a hand-installed one.
