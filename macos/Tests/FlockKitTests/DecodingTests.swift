@@ -72,6 +72,27 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     #expect(status.sites.isEmpty && status.warnings.isEmpty)
     #expect(!status.isDegraded)
     #expect(status.channel == "stable")
+    #expect(status.defaults == nil)
+}
+
+@Test func decodesTheFirstRunsDefaultInstalls() throws {
+    let status = try decode(Status.self, """
+    {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","processes":[],
+     "defaults":{"php":{"version":"8.5","state":"installing","error":""},"node":{"state":"waiting"}}}
+    """)
+
+    let defaults = try #require(status.defaults)
+    #expect(defaults.php == Status.DefaultInstall(version: "8.5", state: .installing))
+    #expect(defaults.node.version.isEmpty && defaults.node.state == .waiting && defaults.node.isPending)
+
+    let failed = try decode(Status.Defaults.self, """
+    {"php":{"version":"8.5","state":"done"},"node":{"version":"24","state":"failed","error":"checksum mismatch"}}
+    """)
+    #expect(failed.php.state == .done && !failed.php.isPending)
+    #expect(failed.node.state == .failed && failed.node.error == "checksum mismatch" && !failed.node.isPending)
+
+    let odd = try decode(Status.Defaults.self, #"{"php":{"version":"8.5","state":"something-new"}}"#)
+    #expect(odd.php.state == .unknown && odd.node == Status.DefaultInstall())
 }
 
 @Test func decodesMailListAndDetail() throws {

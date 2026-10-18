@@ -177,6 +177,32 @@ public class DecodingTests
         Assert.Empty(status.Sites);
         Assert.Empty(status.Warnings);
         Assert.False(status.IsDegraded);
+        // Both defaults are set.
+        Assert.Null(status.Defaults);
+    }
+
+    [Fact]
+    public void DecodesTheFirstRunInstallOfTheDefaults()
+    {
+        var status = FlockJson.Decode<Status>("""
+            {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z",
+             "defaults":{"php":{"version":"8.5","state":"failed","error":"download failed"},"node":{"state":"waiting"}}}
+            """);
+        var defaults = status.Defaults!;
+        Assert.Equal(("8.5", Status.DefaultState.Failed, "download failed"), (defaults.Php.Version, defaults.Php.State, defaults.Php.Error));
+        Assert.True(defaults.Php.IsFailed);
+        Assert.False(defaults.Php.IsPending);
+        Assert.Equal(("", Status.DefaultState.Waiting, ""), (defaults.Node.Version, defaults.Node.State, defaults.Node.Error));
+        Assert.True(defaults.Node.IsPending);
+        Assert.False(defaults.Node.IsInstalling);
+
+        var installing = FlockJson.Decode<Status>("""
+            {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z",
+             "defaults":{"php":{"version":"8.5","state":"done"},"node":{"version":"24","state":"installing"}}}
+            """).Defaults!;
+        Assert.False(installing.Php.IsPending);
+        Assert.True(installing.Node.IsInstalling);
+        Assert.Equal("24", installing.Node.Version);
     }
 
     [Fact]

@@ -41,6 +41,25 @@ type Site struct {
 	KeyFile  string
 }
 
+// Waiting is a linked site that can't be served because its PHP isn't installed: its names get
+// Flock's page saying so (and offering the install) instead of the "not linked" page.
+type Waiting struct {
+	Domain  string
+	Aliases []string
+	Name    string // the site's name
+	PHP     string // the version it needs
+	State   string // WaitingInstalling, WaitingMissing or WaitingUnavailable
+	File    string // the project file that pins PHP ("" when the version isn't pinned there)
+}
+
+// States of a Waiting site: its PHP is being installed (also the first run's default PHP), can
+// be installed, or has no build for this platform.
+const (
+	WaitingInstalling  = "installing"
+	WaitingMissing     = "missing"
+	WaitingUnavailable = "unavailable"
+)
+
 // Config is everything the web server needs to know.
 type Config struct {
 	StorageDir string
@@ -49,8 +68,9 @@ type Config struct {
 	HTTPSPort  int
 	// Bind is the listen host. macOS only lets non-root processes bind ports below 1024
 	// on the wildcard address, so it is empty there and non-local clients are rejected per request.
-	Bind  string
-	Sites []Site
+	Bind    string
+	Sites   []Site
+	Waiting []Waiting
 	// TLD limits the names HTTPS answers for; Issue makes a certificate for one of them.
 	TLD   string
 	Issue func(name string) (*tls.Certificate, error)
@@ -120,11 +140,12 @@ func Caddyfile(cfg Config) string {
 		fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s}\n", addresses("http", hosts, cfg), app(s))
 	}
 
-	// Any other name gets the "not linked" page, its host and scheme filled in by templates.
-	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s}\n", addresses("http", []string{""}, cfg), unlinked(cfg))
+	// Any other name gets the "not linked" page, its host and scheme filled in by templates. A site
+	// waiting for its PHP names itself and the version, so the page says that instead.
+	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s}\n", addresses("http", []string{""}, cfg), waiting(cfg), unlinked(cfg))
 	// Without this, https:// to an unknown or unsecured name would fail the handshake (or hang).
 	// A linked site that isn't secured names itself, so the page asks to secure it rather than link it.
-	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s}\n", addresses("https", []string{""}, cfg), tlsBlock, unsecured(cfg), unlinked(cfg))
+	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s%s}\n", addresses("https", []string{""}, cfg), tlsBlock, unsecured(cfg), waiting(cfg), unlinked(cfg))
 
 	return b.String()
 }
@@ -137,6 +158,18 @@ func unsecured(cfg Config) string {
 			continue
 		}
 		fmt.Fprintf(&b, "\t@unsecured%[1]d host %[2]s\n\tvars @unsecured%[1]d flock_site %[3]s\n", i, strings.Join(s.Hosts(), " "), quote(siteName(s.Domain, cfg.TLD)))
+	}
+	return b.String()
+}
+
+// waiting sets {http.vars.flock_php_*} on every host of a site waiting for its PHP: the site's
+// name, the PHP version, the state and the project file that pins it.
+func waiting(cfg Config) string {
+	var b strings.Builder
+	for i, w := range cfg.Waiting {
+		hosts := Site{Domain: w.Domain, Aliases: w.Aliases}.Hosts()
+		fmt.Fprintf(&b, "\t@waiting%[1]d host %[2]s\n\tvars @waiting%[1]d {\n\t\tflock_php_site %[3]s\n\t\tflock_php %[4]s\n\t\tflock_php_state %[5]s\n\t\tflock_php_file %[6]s\n\t}\n",
+			i, strings.Join(hosts, " "), quote(w.Name), quote(w.PHP), quote(w.State), quote(w.File))
 	}
 	return b.String()
 }

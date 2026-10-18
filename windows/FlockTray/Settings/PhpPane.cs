@@ -40,12 +40,40 @@ internal sealed class PhpPane(SettingsWindow window, AppModel model) : Pane(wind
         }
     }
 
+    /// <summary>
+    /// Asks about a pending flock://install/php link (App.OpenLink, e.g. from the page served for a
+    /// site whose PHP is missing) once the versions are loaded, like Services does for services.
+    /// </summary>
+    private void ConfirmPendingLink()
+    {
+        if (Model.PendingInstall is not { Service: InstallLink.Php } link || link.ResolvePhp(Store.Php) is not { } request)
+        {
+            return;
+        }
+        Model.PendingInstall = null;
+        // Not while building the pane: a dialog needs the window's content in place.
+        Window.DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (request.Target is not { } target)
+            {
+                await Ui.Inform(Window.Content.XamlRoot, request.Title, request.Message);
+                return;
+            }
+            if (await Window.Confirm(request.Title, request.Message, "Install"))
+            {
+                var minor = target.Line;
+                await Run(minor, () => Store.PerformOnPhpAsync(c => c.InstallPhpAsync(minor)));
+            }
+        });
+    }
+
     public override UIElement Build()
     {
         if (Store.Php is not { } catalog)
         {
             return Ui.Row(10, new ProgressRing { Width = 16, Height = 16 }, Ui.Text("Loading PHP versions…", foreground: Ui.SecondaryText));
         }
+        ConfirmPendingLink();
 
         var page = new StackPanel();
 

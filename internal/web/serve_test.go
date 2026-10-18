@@ -70,6 +70,11 @@ func TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS(t *testing.T) {
 			{Domain: "app.test", Aliases: []string{"app-2.test"}, Root: dir, FPM: []string{"127.0.0.1:1"}, CertFile: certFile, KeyFile: keyFile},
 			{Domain: "plain.test", Root: dir, FPM: []string{"127.0.0.1:1"}},
 		},
+		Waiting: []Waiting{
+			{Domain: "fresh.test", Name: "fresh", PHP: "8.5", State: WaitingInstalling},
+			{Domain: "shop.test", Aliases: []string{"shop-2.test"}, Name: "shop", PHP: "8.4", State: WaitingMissing, File: ".flockrc"},
+			{Domain: "legacy.test", Name: "legacy", PHP: "7.3", State: WaitingUnavailable},
+		},
 	}
 	if err := Apply(cfg); err != nil {
 		t.Fatalf("%v\n%s", err, Caddyfile(cfg))
@@ -149,6 +154,25 @@ func TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS(t *testing.T) {
 		strings.Contains(body, "{{") || strings.Contains(body, `href="flock://secure`) ||
 		resp.Header.Get("Cache-Control") != "no-store" || resp.Header.Get("X-Flock-Page") != "unlinked" {
 		t.Errorf("http catch-all: got %d %v %q", resp.StatusCode, resp.Header, body)
+	}
+
+	// A site waiting for its PHP says so on every name and scheme, with what it needs.
+	for url, want := range map[string][]string{
+		https("fresh.test"): {"Needs PHP", "installing PHP 8.5", "data-wait"},
+		fmt.Sprintf("http://x.shop-2.test:%d/", cfg.HTTPPort): {"<strong>shop</strong>", "pinned in <code>.flockrc</code>",
+			`href="flock://install/php/8.4"`, "flock php install 8.4<"},
+		fmt.Sprintf("http://legacy.test:%d/", cfg.HTTPPort): {"no build of PHP 7.3", "flock isolate php &lt;version&gt;"},
+	} {
+		resp, body, err := get(url)
+		if err != nil {
+			t.Errorf("%s: %v", url, err)
+			continue
+		}
+		for _, w := range want {
+			if resp.StatusCode != http.StatusNotFound || !strings.Contains(body, w) || strings.Contains(body, "Not linked") {
+				t.Errorf("%s: want the PHP page with %q, got %d %q", url, w, resp.StatusCode, body)
+			}
+		}
 	}
 
 	// Plain HTTP redirects secured sites at every depth.

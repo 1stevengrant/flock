@@ -126,8 +126,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
     /// <summary>
     /// A flock:// link (registered by the installer). flock://install, e.g. from the website's
-    /// install buttons, shows the service in Settings → Services, which asks before installing
-    /// anything; before the setup the link waits, and Services asks about it once Flock is set up.
+    /// install buttons, shows the service in Settings → Services (a PHP or Node.js version in
+    /// Settings → PHP or Node), which asks before installing anything; before the setup the link
+    /// waits, and the pane asks about it once Flock is set up.
     /// flock://secure, from the page served for a site that isn't secured, asks in Settings → Sites.
     /// flock://update, from `flock update`, installs an update of the app in Settings → General
     /// (before the setup without opening Settings).
@@ -156,8 +157,28 @@ public sealed partial class App : Application, IXamlMetadataProvider
             Open(WindowKind.Setup);
             return;
         }
-        Open(WindowKind.Settings, SettingsPane.Services);
-        (windows[WindowKind.Settings] as SettingsWindow)?.ShowService(link.Service);
+        ShowInstall(link);
+    }
+
+    /// <summary>
+    /// Opens the pane that asks about an install link: PHP and Node for their versions, Services
+    /// (on the service's details) for everything else.
+    /// </summary>
+    public void ShowInstall(InstallLink link)
+    {
+        switch (link.Service)
+        {
+            case InstallLink.Php:
+                Open(WindowKind.Settings, SettingsPane.Php);
+                break;
+            case InstallLink.Node:
+                Open(WindowKind.Settings, SettingsPane.Node);
+                break;
+            default:
+                Open(WindowKind.Settings, SettingsPane.Services);
+                (windows[WindowKind.Settings] as SettingsWindow)?.ShowService(link.Service);
+                break;
+        }
     }
 
     private void ShowMenu()

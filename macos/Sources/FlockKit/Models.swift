@@ -26,6 +26,9 @@ public struct Status: Decodable, Sendable, Equatable {
     public var warnings: [String]
     /// The channel config.json follows: "stable", "beta" or "experimental" (`flock channel`).
     public var channel: String
+    /// The first run's installs of the newest PHP and Node.js LTS, which become the defaults;
+    /// nil once both defaults are set.
+    public var defaults: Defaults?
 
     public struct DNSStatus: Decodable, Sendable, Equatable {
         public var tld: String
@@ -289,6 +292,67 @@ public struct Status: Decodable, Sendable, Equatable {
         }
     }
 
+    /// The first run's default PHP and Node.js installs.
+    public struct Defaults: Decodable, Sendable, Equatable {
+        public var php: DefaultInstall
+        public var node: DefaultInstall
+
+        public init(php: DefaultInstall = DefaultInstall(), node: DefaultInstall = DefaultInstall()) {
+            self.php = php
+            self.node = node
+        }
+
+        enum CodingKeys: String, CodingKey { case php, node }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            php = try c.decodeIfPresent(DefaultInstall.self, forKey: .php) ?? DefaultInstall()
+            node = try c.decodeIfPresent(DefaultInstall.self, forKey: .node) ?? DefaultInstall()
+        }
+    }
+
+    /// One of the first run's installs: the newest PHP minor or Node.js LTS major, until it is the default.
+    public struct DefaultInstall: Decodable, Sendable, Equatable {
+        /// "8.5", "24"; empty until the package manifest says which.
+        public var version: String
+        public var state: State
+        /// Why it failed; the user tries again from Settings → PHP or Node.
+        public var error: String
+
+        public init(version: String = "", state: State = .done, error: String = "") {
+            self.version = version
+            self.state = state
+            self.error = error
+        }
+
+        /// Not installed yet, but on its way.
+        public var isPending: Bool { state == .waiting || state == .installing }
+
+        public enum State: String, Decodable, Sendable {
+            /// No package manifest yet (e.g. offline).
+            case waiting
+            case installing
+            /// See `error`.
+            case failed
+            /// The default is set.
+            case done
+            case unknown
+
+            public init(from decoder: Decoder) throws {
+                self = State(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+            }
+        }
+
+        enum CodingKeys: String, CodingKey { case version, state, error }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version = try c.decodeIfPresent(String.self, forKey: .version) ?? ""
+            state = try c.decodeIfPresent(State.self, forKey: .state) ?? .unknown
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+        }
+    }
+
     /// Something needs attention: a warning, or a supervised process that is down.
     public var isDegraded: Bool {
         !warnings.isEmpty || processes.contains { !$0.up }
@@ -296,7 +360,7 @@ public struct Status: Decodable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case version, pid, startedAt, dns, httpPort, httpsPort, mail, postgres, valkey, extras
-        case xdebug, xdebugBreakpoints, dumps, mailCount, dumpCount, sites, processes, warnings, channel
+        case xdebug, xdebugBreakpoints, dumps, mailCount, dumpCount, sites, processes, warnings, channel, defaults
     }
 
     // Go omits empty slices (`omitempty`) or sends null; treat both as empty.
@@ -321,6 +385,7 @@ public struct Status: Decodable, Sendable, Equatable {
         processes = try c.decodeIfPresent([Process].self, forKey: .processes) ?? []
         warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
         channel = try c.decodeIfPresent(String.self, forKey: .channel) ?? "stable"
+        defaults = try c.decodeIfPresent(Defaults.self, forKey: .defaults)
     }
 }
 

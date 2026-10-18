@@ -24,7 +24,7 @@ struct NodePane: View {
                             Text("No Node.js versions to show yet.").foregroundStyle(.secondary)
                         }
                         ForEach(catalog.versions) { release in
-                            NodeReleaseRow(release: release)
+                            NodeReleaseRow(release: release, installing: installing.contains(release.major))
                         }
                     } header: {
                         HStack {
@@ -54,7 +54,39 @@ struct NodePane: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
         }
-        .task { await store.refreshNode() }
+        // Also reloads when an install the rows didn't start finishes.
+        .task(id: installing) { await store.refreshNode() }
+        // A flock://install/node link (AppModel.handle): nothing installs until the user confirms here.
+        .alert(linkRequest?.title ?? "", isPresented: Binding(get: { linkRequest != nil }, set: { if !$0 { model.pendingInstall = nil } }),
+               presenting: linkRequest) { request in
+            if let install = request.confirmation {
+                Button("Install") {
+                    let major = install.line
+                    Task { await store.installNode(major) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } else {
+                Button("OK") {}
+            }
+        } message: { request in
+            Text(request.message)
+        }
+    }
+
+    /// The majors an install runs for that no row started: the first run's default (which the
+    /// versions don't show), or one a link asked for.
+    private var installing: Set<String> {
+        var majors = model.settings.nodePending
+        if let node = model.status?.defaults?.node, node.state == .installing, !node.version.isEmpty {
+            majors.insert(node.version)
+        }
+        return majors
+    }
+
+    /// What a pending flock://install link for Node.js asks for, once the versions are loaded.
+    private var linkRequest: InstallLink.Resolution? {
+        guard let link = model.pendingInstall, link.service == "node" else { return nil }
+        return link.resolve(node: model.settings.node, installing: installing)
     }
 
     @ViewBuilder
@@ -89,12 +121,19 @@ struct NodePane: View {
 private struct NodeReleaseRow: View {
     @Environment(AppModel.self) private var model
     let release: NodeRelease
+    /// An install the row didn't start runs for this major (see NodePane.installing).
+    let installing: Bool
 
     // What the row is doing while the daemon works (installs answer when they're done).
     private let busyState = State<String?>(initialValue: nil)
     private var busy: String? {
         get { busyState.wrappedValue }
         nonmutating set { busyState.wrappedValue = newValue }
+    }
+
+    /// The row's own work, or an install it didn't start, which shows the same way.
+    private var step: String? {
+        busy ?? (installing ? "Downloading Node.js \(release.latest)…" : nil)
     }
     private let confirmUninstallState = State<Bool>(initialValue: false)
     private var confirmUninstall: Bool {
@@ -117,7 +156,7 @@ private struct NodeReleaseRow: View {
 
             Spacer(minLength: 12)
             actions
-                .disabled(busy != nil)
+                .disabled(step != nil)
         }
         .padding(.vertical, 3)
         .confirmationDialog("Uninstall Node \(release.major)?", isPresented: confirmUninstallState.projectedValue) {
@@ -136,10 +175,10 @@ private struct NodeReleaseRow: View {
     /// The status line under the name.
     @ViewBuilder
     private var detail: some View {
-        if let busy {
+        if let step {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
-                Text(busy)
+                Text(step)
             }
             .font(.caption).foregroundStyle(.secondary)
         } else {

@@ -352,6 +352,7 @@ func TestSitesSwitchToFrankenPHPAndBack(t *testing.T) {
 	}
 	srv := serve(t, b, "")
 	cfg := b.config(t)
+	cfg.DefaultPHP = "8.5"
 	cfg.Upsert(config.Site{Name: "app", Path: t.TempDir()})
 	cfg.Upsert(config.Site{Name: "old", Path: t.TempDir(), PHP: "8.1"})
 	if err := cfg.Save(root); err != nil {

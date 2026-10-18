@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// The menu bar icon. It is the only view that exists at launch, so it also opens the
 /// window requested by `--snapshot`, the main window when started by hand, and Settings →
-/// Services or Sites for a flock:// link.
+/// Services (or PHP, Node) or Sites for a flock:// link.
 private struct MenuBarLabel: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -130,7 +130,7 @@ private struct MenuBarLabel: View {
         openWindow.activating(model.needsSetup ? WindowID.setup : WindowID.settings)
     }
 
-    /// Before the setup an install link waits: Services asks about it once Flock is set up. An
+    /// Before the setup an install link waits: Services (or PHP, Node) asks about it once Flock is set up. An
     /// update link opens Settings only once Flock is set up; Sparkle's window shows the check.
     private func open(_ link: FlockLink) {
         model.handle(link)

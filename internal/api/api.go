@@ -47,7 +47,32 @@ type Status struct {
 	Processes         []supervisor.ProcStatus `json:"processes"`
 	Warnings          []string                `json:"warnings,omitempty"`
 	Channel           string                  `json:"channel"` // see ChannelOf; the apps' own updates follow it too
+	// Defaults is set while there is no default PHP or Node.js yet: the first run installs the
+	// newest stable ones and makes them the defaults.
+	Defaults *DefaultsStatus `json:"defaults,omitempty"`
 }
+
+// DefaultsStatus is the first run's install of the default PHP and Node.js.
+type DefaultsStatus struct {
+	PHP  DefaultInstall `json:"php"`
+	Node DefaultInstall `json:"node"`
+}
+
+// DefaultInstall is the install of one default. Version is "" until the package manifest names it.
+type DefaultInstall struct {
+	Version string `json:"version,omitempty"`
+	State   string `json:"state"` // DefaultWaiting, DefaultInstalling, DefaultFailed or DefaultDone
+	Error   string `json:"error,omitempty"`
+}
+
+// States of a DefaultInstall: waiting for the package manifest (offline), installing, failed (the
+// PHP or Node pane can try again), or done (the default is set).
+const (
+	DefaultWaiting    = "waiting"
+	DefaultInstalling = "installing"
+	DefaultFailed     = "failed"
+	DefaultDone       = "done"
+)
 
 // ExtraStatus is an installed catalog service (MySQL, Redis, ...).
 type ExtraStatus struct {

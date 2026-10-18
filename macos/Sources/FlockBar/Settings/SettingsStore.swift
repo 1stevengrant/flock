@@ -28,6 +28,9 @@ final class SettingsStore {
     private(set) var catalogPending: Set<String> = []
     /// PostgreSQL operations this window started that haven't answered yet, by major.
     private(set) var postgresPending: [String: PostgresMajor.Busy] = [:]
+    /// Node.js majors a flock://install link installs that the daemon hasn't answered for yet
+    /// (the Node pane's rows track the installs started there).
+    private(set) var nodePending: Set<String> = []
     var error: String?
     private(set) var isBusy = false
     var isVisible = false
@@ -182,6 +185,13 @@ final class SettingsStore {
             self.error = error.localizedDescription
         }
         await refresh()
+    }
+
+    /// Installs a Node.js major for a flock://install link; the install answers when it's done.
+    func installNode(_ major: String) async {
+        nodePending.insert(major)
+        defer { nodePending.remove(major) }
+        await performOnNode { try await $0.installNodeMajor(major) }
     }
 
     // MARK: PostgreSQL versions and the catalog (Services pane)

@@ -39,6 +39,49 @@ public sealed class Status
     public List<Site> Sites { get; init; } = [];
     public List<Process> Processes { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
+    /// <summary>
+    /// The first run's install of the newest PHP and Node.js LTS, which then become the defaults;
+    /// null once both defaults are set.
+    /// </summary>
+    public FirstRunDefaults? Defaults { get; init; }
+
+    public sealed class FirstRunDefaults
+    {
+        public DefaultInstall Php { get; init; } = new();
+        public DefaultInstall Node { get; init; } = new();
+    }
+
+    /// <summary>The install of one default (a PHP minor, a Node.js major).</summary>
+    public sealed class DefaultInstall
+    {
+        /// <summary>"8.5", "24"; empty until the package manifest names it.</summary>
+        public string Version { get; init; } = "";
+        /// <summary>One of DefaultState.</summary>
+        public string State { get; init; } = DefaultState.Done;
+        /// <summary>Why it failed; it is tried again from Settings → PHP or Node.</summary>
+        public string Error { get; init; } = "";
+
+        /// <summary>Not installed yet, but on its way: waiting for the manifest or installing.</summary>
+        [JsonIgnore]
+        public bool IsPending => State is DefaultState.Waiting or DefaultState.Installing;
+
+        [JsonIgnore]
+        public bool IsInstalling => State == DefaultState.Installing;
+
+        [JsonIgnore]
+        public bool IsFailed => State == DefaultState.Failed;
+    }
+
+    /// <summary>Values of DefaultInstall.State.</summary>
+    public static class DefaultState
+    {
+        /// <summary>No package manifest yet (e.g. offline).</summary>
+        public const string Waiting = "waiting";
+        public const string Installing = "installing";
+        public const string Failed = "failed";
+        /// <summary>The default is set.</summary>
+        public const string Done = "done";
+    }
 
     /// <summary>An installed catalog service, for the tray panel.</summary>
     public sealed class ExtraService

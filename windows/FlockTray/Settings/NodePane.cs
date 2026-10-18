@@ -13,18 +13,70 @@ internal sealed class NodePane(SettingsWindow window, AppModel model) : Pane(win
     // Majors with an install or uninstall in flight (and what to show meanwhile); the daemon answers when it's done.
     private readonly Dictionary<string, string> busy = [];
     private bool checking;
+    // The major the first run installs as the default, as last seen in the status (see Build).
+    private string? installingDefault;
 
     public override string Title => "Node";
     public override string Subtitle => "node, npm and npx follow the project's .nvmrc / .node-version, then the site's version, then the default.";
 
     public override void Shown(CancellationToken hidden) => _ = Store.RefreshNodeAsync();
 
+    /// <summary>
+    /// The major the daemon installs as the default on its first run. The Node.js versions don't
+    /// show that install, only the status does; its row shows it like an install started here.
+    /// </summary>
+    private string? DefaultInstalling =>
+        Model.Status?.Defaults?.Node is { IsInstalling: true, Version.Length: > 0 } node ? node.Version : null;
+
+    /// <summary>What a major's row shows while a request or the default's install runs; null when nothing does.</summary>
+    private string? Step(NodeRelease release) =>
+        busy.TryGetValue(release.Major, out var step) ? step
+        : release.Major == DefaultInstalling && !release.IsInstalled ? $"Downloading Node.js {release.Latest}…"
+        : null;
+
+    /// <summary>
+    /// Asks about a pending flock://install/node link (App.OpenLink) once the versions are loaded,
+    /// like Services does for services.
+    /// </summary>
+    private void ConfirmPendingLink()
+    {
+        List<string> installing = DefaultInstalling is { } byDefault ? [.. busy.Keys, byDefault] : [.. busy.Keys];
+        if (Model.PendingInstall is not { Service: InstallLink.Node } link || link.ResolveNode(Store.Node, installing) is not { } request)
+        {
+            return;
+        }
+        Model.PendingInstall = null;
+        // Not while building the pane: a dialog needs the window's content in place.
+        Window.DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (request.Target is not { } target)
+            {
+                await Ui.Inform(Window.Content.XamlRoot, request.Title, request.Message);
+                return;
+            }
+            if (await Window.Confirm(request.Title, request.Message, "Install"))
+            {
+                var major = target.Line;
+                await Run(major, $"Downloading Node.js {target.Version}…", c => c.InstallNodeMajorAsync(major));
+            }
+        });
+    }
+
     public override UIElement Build()
     {
+        // The default's install is done (or failed): the versions show the result.
+        var installing = DefaultInstalling;
+        if (installingDefault is not null && installing != installingDefault)
+        {
+            _ = Store.RefreshNodeAsync();
+        }
+        installingDefault = installing;
+
         if (Store.Node is not { } catalog)
         {
             return Ui.Row(10, new ProgressRing { Width = 16, Height = 16 }, Ui.Text("Loading Node.js versions…", foreground: Ui.SecondaryText));
         }
+        ConfirmPendingLink();
 
         var checkedText = catalog.CheckedAt is { } at ? $"Checked {Ui.Relative(at)}" : "Not checked yet";
         UIElement check = checking
@@ -78,7 +130,7 @@ internal sealed class NodePane(SettingsWindow window, AppModel model) : Pane(win
     /// <summary>The status line under the name.</summary>
     private UIElement Detail(NodeRelease release)
     {
-        if (busy.TryGetValue(release.Major, out var step))
+        if (Step(release) is { } step)
         {
             return Ui.Row(6, new ProgressRing { Width = 12, Height = 12 }, Ui.Caption(step, wrap: false));
         }
@@ -100,11 +152,11 @@ internal sealed class NodePane(SettingsWindow window, AppModel model) : Pane(win
         return line;
     }
 
-    /// <summary>The row's buttons; disabled while its request runs (the status line shows the progress).</summary>
+    /// <summary>The row's buttons; disabled while its request or the default's install runs (the status line shows the progress).</summary>
     private StackPanel Actions(NodeRelease release)
     {
         var actions = BuildActions(release);
-        Ui.SetEnabled(actions, !busy.ContainsKey(release.Major));
+        Ui.SetEnabled(actions, Step(release) is null);
         return actions;
     }
 

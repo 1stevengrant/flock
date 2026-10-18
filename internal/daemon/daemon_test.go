@@ -13,9 +13,17 @@ import (
 	"time"
 
 	"flock/internal/api"
+	"flock/internal/binaries"
 	"flock/internal/config"
 	"flock/internal/paths"
 )
+
+// TestMain keeps the daemons offline: without the package manifest, the first run doesn't
+// download PHP and Node.js, and versions count as offered.
+func TestMain(m *testing.M) {
+	binaries.Bases = nil
+	os.Exit(m.Run())
+}
 
 // shortTempDir keeps the socket path under macOS's ~104 byte AF_UNIX limit,
 // which t.TempDir() under /var/folders can exceed.
@@ -49,6 +57,7 @@ func testRoot(t *testing.T, mutate func(*config.Config)) (string, *config.Config
 
 	root := shortTempDir(t)
 	cfg := config.Default()
+	cfg.DefaultPHP, cfg.DefaultNode = "8.5", "22" // as after the first run
 	cfg.Ports = config.Ports{HTTP: freePort(t), HTTPS: freePort(t), DNS: freePort(t), SMTP: freePort(t), Postgres: freePort(t)}
 	if mutate != nil {
 		mutate(cfg)
@@ -136,6 +145,40 @@ func TestReloadReportsSitesWithMissingPHP(t *testing.T) {
 	}
 	if len(status.Sites) != 1 || status.Sites[0].Problem != "PHP 7.0 is not installed" {
 		t.Fatalf("unexpected sites: %+v", status.Sites)
+	}
+}
+
+func TestTheFirstRunWaitsForTheDefaultsAndSaysSo(t *testing.T) {
+	root, cfg := testRoot(t, func(cfg *config.Config) { cfg.DefaultPHP, cfg.DefaultNode = "", "" })
+	cfg.Upsert(config.Site{Name: "app", Path: t.TempDir()})
+	if err := cfg.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	client := startDaemon(t, root)
+
+	status, err := client.Reload(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Offline there is no manifest yet to pick the versions from.
+	if d := status.Defaults; d == nil || d.PHP.State != api.DefaultWaiting || d.Node.State != api.DefaultWaiting {
+		t.Fatalf("defaults: %+v", status.Defaults)
+	}
+	if len(status.Sites) != 1 || status.Sites[0].Problem != "PHP is being installed" {
+		t.Fatalf("sites: %+v", status.Sites)
+	}
+
+	// The site's name gets the page that says PHP is coming, not "not linked".
+	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(cfg.Ports.HTTP)+"/", nil)
+	req.Host = "app.test"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Installing PHP") || strings.Contains(string(body), "Not linked") {
+		t.Fatalf("got %d %q", resp.StatusCode, body)
 	}
 }
 

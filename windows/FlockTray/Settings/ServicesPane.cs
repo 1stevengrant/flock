@@ -45,11 +45,13 @@ internal sealed partial class ServicesPane(SettingsWindow window, AppModel model
 
     /// <summary>
     /// Asks about a pending flock://install link (App.Open) once the services and versions are
-    /// loaded: nothing installs until the user confirms here.
+    /// loaded: nothing installs until the user confirms here. The PHP and Node panes ask about
+    /// links to their versions.
     /// </summary>
     private void ConfirmPendingLink()
     {
-        if (Model.PendingInstall is not { } link || link.Resolve(Store.Services, Store.Catalog, Store.Postgres) is not { } request)
+        if (Model.PendingInstall is not { Service: not (InstallLink.Php or InstallLink.Node) } link
+            || link.Resolve(Store.Services, Store.Catalog, Store.Postgres) is not { } request)
         {
             return;
         }

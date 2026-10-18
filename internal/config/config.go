@@ -182,12 +182,11 @@ func (c *Config) nextSitePort(site string) int {
 	return port
 }
 
-// Default returns the config used when none exists yet.
+// Default returns the config used when none exists yet. It has no default PHP and Node.js: the
+// daemon installs the newest stable ones on the first run and makes them the defaults then.
 func Default() *Config {
 	return &Config{
 		TLD:               "test",
-		DefaultPHP:        "8.5",
-		DefaultNode:       "22",
 		Xdebug:            true,
 		XdebugBreakpoints: true,
 		Ports:             Ports{HTTP: 80, HTTPS: 443, DNS: 53535, SMTP: 2525, Postgres: 5432, Dumps: 9912, API: 53531},

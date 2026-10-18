@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"flock/internal/api"
 )
 
 func newStatusCommand() *cobra.Command {
@@ -73,6 +75,16 @@ func newStatusCommand() *cobra.Command {
 				}
 				fmt.Fprintf(out, "process   %s %s\n", p.Name, state)
 			}
+			if d := st.Defaults; d != nil {
+				for _, in := range []struct {
+					name string
+					api.DefaultInstall
+				}{{"PHP", d.PHP}, {"Node.js", d.Node}} {
+					if line := defaultInstallLine(in.name, in.DefaultInstall); line != "" {
+						fmt.Fprintf(out, "setup     %s\n", line)
+					}
+				}
+			}
 			for _, w := range st.Warnings {
 				fmt.Fprintf(out, "warning   %s\n", w)
 			}
@@ -125,4 +137,21 @@ func newSitesCommand() *cobra.Command {
 			return w.Flush()
 		},
 	}
+}
+
+// defaultInstallLine describes the first run's install of a default version ("" once it is set).
+func defaultInstallLine(name string, in api.DefaultInstall) string {
+	version := name
+	if in.Version != "" {
+		version += " " + in.Version
+	}
+	switch in.State {
+	case api.DefaultInstalling:
+		return "installing " + version + " as the default"
+	case api.DefaultFailed:
+		return fmt.Sprintf("installing %s failed: %s", version, in.Error)
+	case api.DefaultWaiting:
+		return fmt.Sprintf("%s is installed as the default once Flock can download it", version)
+	}
+	return ""
 }
