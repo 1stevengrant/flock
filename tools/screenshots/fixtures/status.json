@@ -1,0 +1,123 @@
+{
+  "version": "1.0.0",
+  "channel": "stable",
+  "pid": 7316,
+  "started_at": "{{now-2h}}",
+  "dns": {
+    "tld": "test",
+    "addr": "127.0.0.1:53",
+    "wildcard": true,
+    "max_depth": 4
+  },
+  "http_port": 80,
+  "https_port": 443,
+  "mail": "127.0.0.1:2525",
+  "postgres": "18.6 on 127.0.0.1:5432",
+  "valkey": "9.1.2 on 127.0.0.1:6379",
+  "extras": [
+    {
+      "id": "mysql",
+      "name": "MySQL",
+      "version": "8.4.11",
+      "port": 3306,
+      "enabled": true,
+      "up": true
+    }
+  ],
+  "xdebug": true,
+  "xdebug_breakpoints": false,
+  "dumps": true,
+  "mail_count": 3,
+  "dump_count": 4,
+  "sites": [
+    {
+      "name": "acme",
+      "domain": "acme.test",
+      "path": "C:\\Users\\demo\\Code\\acme",
+      "php": "8.5",
+      "php_source": "project",
+      "php_pinned": "8.5",
+      "php_file": "C:\\Users\\demo\\Code\\acme\\.flockrc",
+      "node": "24",
+      "node_source": "default",
+      "secured": true,
+      "parked": true,
+      "url": "https://acme.test",
+      "domains": [
+        {
+          "entry": "tenant1",
+          "host": "tenant1.acme.test",
+          "alias": false,
+          "url": "https://tenant1.acme.test"
+        }
+      ],
+      "server": "fastcgi",
+      "boost": "current"
+    },
+    {
+      "name": "blog",
+      "domain": "blog.test",
+      "path": "C:\\Users\\demo\\Code\\blog",
+      "php": "8.4",
+      "php_source": "isolated",
+      "node": "24",
+      "node_source": "default",
+      "secured": false,
+      "parked": true,
+      "url": "http://blog.test",
+      "server": "fastcgi"
+    },
+    {
+      "name": "shop",
+      "domain": "shop.test",
+      "path": "C:\\Users\\demo\\Sites\\shop",
+      "php": "8.5",
+      "php_source": "default",
+      "node": "22",
+      "node_source": "isolated",
+      "secured": true,
+      "parked": false,
+      "url": "https://shop.test",
+      "server": "fastcgi"
+    }
+  ],
+  "processes": [
+    {
+      "name": "web",
+      "up": true
+    },
+    {
+      "name": "dns",
+      "up": true
+    },
+    {
+      "name": "mail",
+      "up": true
+    },
+    {
+      "name": "dump-server",
+      "up": true
+    },
+    {
+      "name": "postgres",
+      "up": true
+    },
+    {
+      "name": "valkey",
+      "up": true
+    },
+    {
+      "name": "mysql",
+      "up": true
+    },
+    {
+      "name": "php8.5-cgi-1",
+      "up": true
+    },
+    {
+      "name": "php8.4-cgi-1",
+      "up": true
+    }
+  ],
+  "warnings": []
+}

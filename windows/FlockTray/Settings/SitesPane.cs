@@ -11,7 +11,7 @@ namespace Flock.Tray;
 /// site on this machine; the "…" menu pins a version into the project or removes it again. Each
 /// site runs on php-cgi or on FrankenPHP (classic, or Laravel Octane's worker mode).
 /// </summary>
-internal sealed class SitesPane(SettingsWindow window, AppModel model) : Pane(window, model)
+internal sealed partial class SitesPane(SettingsWindow window, AppModel model) : Pane(window, model)
 {
     private string? selection;
     // The list and the details scroll separately, and keep their place across re-renders.

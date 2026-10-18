@@ -1,0 +1,75 @@
+[
+    {
+        "id": "fixture-4",
+        "time": "{{now-40s}}",
+        "label": null,
+        "site": "acme",
+        "source": {
+            "file": "C:\\Users\\demo\\Code\\acme\\app\\Http\\Controllers\\OrderController.php",
+            "line": 34,
+            "name": "OrderController.php"
+        },
+        "request": {
+            "method": "GET",
+            "uri": "https://acme.test/orders/1042"
+        },
+        "command_line": null,
+        "group": "request-2",
+        "text": "\"select * from \"orders\" where \"id\" = ? limit 1\"",
+        "html": "<pre class=sf-dump id=sf-dump-754634320 data-indent-pad=\"  \">\"<span class=sf-dump-str title=\"45 characters\">select * from &quot;orders&quot; where &quot;id&quot; = ? limit 1</span>\"\n</pre><script>Sfdump(\"sf-dump-754634320\")</script>\n"
+    },
+    {
+        "id": "fixture-3",
+        "time": "{{now-40s}}",
+        "label": "order",
+        "site": "acme",
+        "source": {
+            "file": "C:\\Users\\demo\\Code\\acme\\app\\Http\\Controllers\\OrderController.php",
+            "line": 32,
+            "name": "OrderController.php"
+        },
+        "request": {
+            "method": "GET",
+            "uri": "https://acme.test/orders/1042"
+        },
+        "command_line": null,
+        "group": "request-2",
+        "text": "order App\\Models\\Order {#6\n  +id: 1042\n  +status: \"paid\"\n  +total: 129.9\n  +lines: array:2 [\n    0 => array:3 [\n      \"sku\" => \"ACME-MUG\"\n      \"quantity\" => 2\n      \"price\" => 14.95\n    ]\n    1 => array:3 [\n      \"sku\" => \"ACME-HOODIE\"\n      \"quantity\" => 1\n      \"price\" => 100.0\n    ]\n  ]\n}",
+        "html": "<pre class=sf-dump id=sf-dump-835437598 data-indent-pad=\"  \"><span class=sf-dump-label>order</span> <span class=sf-dump-note>App\\Models\\Order</span> {<a class=sf-dump-ref>#6</a><samp data-depth=1 class=sf-dump-expanded>\n  +<span class=sf-dump-public title=\"Public property\">id</span>: <span class=sf-dump-num>1042</span>\n  +<span class=sf-dump-public title=\"Public property\">status</span>: \"<span class=sf-dump-str title=\"4 characters\">paid</span>\"\n  +<span class=sf-dump-public title=\"Public property\">total</span>: <span class=sf-dump-num>129.9</span>\n  +<span class=sf-dump-public title=\"Public property\">lines</span>: <span class=sf-dump-note>array:2</span> [<samp data-depth=2 class=sf-dump-compact>\n    <span class=sf-dump-index>0</span> => <span class=sf-dump-note>array:3</span> [<samp data-depth=3 class=sf-dump-compact>\n      \"<span class=sf-dump-key>sku</span>\" => \"<span class=sf-dump-str title=\"8 characters\">ACME-MUG</span>\"\n      \"<span class=sf-dump-key>quantity</span>\" => <span class=sf-dump-num>2</span>\n      \"<span class=sf-dump-key>price</span>\" => <span class=sf-dump-num>14.95</span>\n    </samp>]\n    <span class=sf-dump-index>1</span> => <span class=sf-dump-note>array:3</span> [<samp data-depth=3 class=sf-dump-compact>\n      \"<span class=sf-dump-key>sku</span>\" => \"<span class=sf-dump-str title=\"11 characters\">ACME-HOODIE</span>\"\n      \"<span class=sf-dump-key>quantity</span>\" => <span class=sf-dump-num>1</span>\n      \"<span class=sf-dump-key>price</span>\" => <span class=sf-dump-num>100.0</span>\n    </samp>]\n  </samp>]\n</samp>}\n</pre><script>Sfdump(\"sf-dump-835437598\")</script>\n"
+    },
+    {
+        "id": "fixture-2",
+        "time": "{{now-40s}}",
+        "label": null,
+        "site": "acme",
+        "source": {
+            "file": "C:\\Users\\demo\\Code\\acme\\app\\Http\\Controllers\\OrderController.php",
+            "line": 31,
+            "name": "OrderController.php"
+        },
+        "request": {
+            "method": "GET",
+            "uri": "https://acme.test/orders/1042"
+        },
+        "command_line": null,
+        "group": "request-2",
+        "text": "App\\Models\\User {#5\n  +id: 42\n  +name: \"Ada Lovelace\"\n  +email: \"ada@acme.test\"\n  +roles: array:2 [\n    0 => \"admin\"\n    1 => \"billing\"\n  ]\n  +email_verified_at: \"2026-03-14 09:26:53\"\n}",
+        "html": "<pre class=sf-dump id=sf-dump-1351804242 data-indent-pad=\"  \"><span class=sf-dump-note>App\\Models\\User</span> {<a class=sf-dump-ref>#5</a><samp data-depth=1 class=sf-dump-expanded>\n  +<span class=sf-dump-public title=\"Public property\">id</span>: <span class=sf-dump-num>42</span>\n  +<span class=sf-dump-public title=\"Public property\">name</span>: \"<span class=sf-dump-str title=\"12 characters\">Ada Lovelace</span>\"\n  +<span class=sf-dump-public title=\"Public property\">email</span>: \"<span class=sf-dump-str title=\"13 characters\">ada@acme.test</span>\"\n  +<span class=sf-dump-public title=\"Public property\">roles</span>: <span class=sf-dump-note>array:2</span> [<samp data-depth=2 class=sf-dump-compact>\n    <span class=sf-dump-index>0</span> => \"<span class=sf-dump-str title=\"5 characters\">admin</span>\"\n    <span class=sf-dump-index>1</span> => \"<span class=sf-dump-str title=\"7 characters\">billing</span>\"\n  </samp>]\n  +<span class=sf-dump-public title=\"Public property\">email_verified_at</span>: \"<span class=sf-dump-str title=\"19 characters\">2026-03-14 09:26:53</span>\"\n</samp>}\n</pre><script>Sfdump(\"sf-dump-1351804242\")</script>\n"
+    },
+    {
+        "id": "fixture-1",
+        "time": "{{now-9m}}",
+        "label": null,
+        "site": "acme",
+        "source": {
+            "file": "C:\\Users\\demo\\Code\\acme\\app\\Console\\Commands\\ImportProducts.php",
+            "line": 57,
+            "name": "ImportProducts.php"
+        },
+        "request": null,
+        "command_line": "php artisan products:import",
+        "group": "cli-1",
+        "text": "array:3 [\n  \"imported\" => 128\n  \"skipped\" => 3\n  \"took\" => \"1.84s\"\n]",
+        "html": "<pre class=sf-dump id=sf-dump-1550974407 data-indent-pad=\"  \"><span class=sf-dump-note>array:3</span> [<samp data-depth=1 class=sf-dump-expanded>\n  \"<span class=sf-dump-key>imported</span>\" => <span class=sf-dump-num>128</span>\n  \"<span class=sf-dump-key>skipped</span>\" => <span class=sf-dump-num>3</span>\n  \"<span class=sf-dump-key>took</span>\" => \"<span class=sf-dump-str title=\"5 characters\">1.84s</span>\"\n</samp>]\n</pre><script>Sfdump(\"sf-dump-1550974407\")</script>\n"
+    }
+]

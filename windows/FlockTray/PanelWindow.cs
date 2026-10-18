@@ -30,6 +30,9 @@ internal sealed partial class PanelWindow : Window
         hwnd = Microsoft.UI.Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         Title = "Flock";
         SystemBackdrop = new DesktopAcrylicBackdrop();
+#if SCREENSHOTS
+        scroller.Background = Screenshots.WindowBackground;
+#endif
 
         var presenter = OverlappedPresenter.Create();
         presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
@@ -43,6 +46,8 @@ internal sealed partial class PanelWindow : Window
         Content = scroller;
         Ui.Shortcut(scroller, Windows.System.VirtualKey.Escape, Windows.System.VirtualKeyModifiers.None, Hide);
         Ui.SettingsShortcut(scroller);
+#if !SCREENSHOTS
+        // Screenshots keep the panel open whichever window has the focus.
         Activated += (_, e) =>
         {
             if (e.WindowActivationState == WindowActivationState.Deactivated)
@@ -50,6 +55,7 @@ internal sealed partial class PanelWindow : Window
                 Hide();
             }
         };
+#endif
         scroller.ActualThemeChanged += (_, _) => dirty = true;
         model.Changed += () =>
         {
