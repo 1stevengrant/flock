@@ -1,5 +1,4 @@
 import FlockKit
-import ServiceManagement
 import SwiftUI
 
 struct GeneralPane: View {
@@ -20,7 +19,7 @@ struct GeneralPane: View {
         get { confirmUnparkState.wrappedValue }
         nonmutating set { confirmUnparkState.wrappedValue = newValue }
     }
-    private let launchAtLoginState = State<Bool>(initialValue: SMAppService.mainApp.status == .enabled)
+    private let launchAtLoginState = State<Bool>(initialValue: LoginItem.isEnabled)
     private var launchAtLogin: Bool {
         get { launchAtLoginState.wrappedValue }
         nonmutating set { launchAtLoginState.wrappedValue = newValue }
@@ -202,18 +201,7 @@ struct GeneralPane: View {
     }
 
     private func setLaunchAtLogin(_ on: Bool) {
-        do {
-            if on {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
-            loginError = SMAppService.mainApp.status == .requiresApproval
-                ? "Allow Flock in System Settings → General → Login Items."
-                : nil
-        } catch {
-            loginError = "Could not change the login item: \(error.localizedDescription)"
-        }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        loginError = LoginItem.set(on)
+        launchAtLogin = LoginItem.isEnabled
     }
 }

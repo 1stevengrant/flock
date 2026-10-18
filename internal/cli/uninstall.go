@@ -20,6 +20,9 @@ var (
 	// userData survives a plain uninstall: sites, parked folders and settings, and in services/
 	// each service's data/ (the PostgreSQL, Valkey, MySQL, Redis, ... databases; per version line).
 	userData = []string{"config.json", "services"}
+	// clutter is what Finder and Explorer leave in a folder that was opened; a purge deletes it so
+	// the data dir itself can go.
+	clutter = []string{".DS_Store", "Thumbs.db", "desktop.ini"}
 )
 
 func uninstallFlags(cmd *cobra.Command, purge *bool) {
@@ -80,7 +83,7 @@ func cleanUp(root string, purge bool) ([]string, error) {
 	for _, e := range entries {
 		path := filepath.Join(root, e.Name())
 		switch {
-		case slices.Contains(rebuildable, e.Name()), purge && slices.Contains(userData, e.Name()):
+		case slices.Contains(rebuildable, e.Name()), purge && slices.Contains(userData, e.Name()), purge && slices.Contains(clutter, e.Name()):
 			errs = append(errs, remove(path))
 		case e.Name() == "services" && e.IsDir():
 			k, err := cleanServices(path)
