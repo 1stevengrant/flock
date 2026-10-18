@@ -319,7 +319,8 @@ func Run(ctx context.Context, cfg Config) error {
 	// a policy arrives, port 53 frees up), so it is checked again regularly.
 	wildcard := time.NewTicker(wildcardInterval)
 	defer wildcard.Stop()
-	// Follow the projects' version files, so a `git pull` that pins another PHP takes effect.
+	// Follow the projects' version files, so a `git pull` that pins another PHP takes effect,
+	// and the parked paths, so a new project folder is served as soon as it exists.
 	watch := time.NewTicker(projectWatchInterval)
 	defer watch.Stop()
 	files := d.projectFiles()
@@ -364,11 +365,12 @@ loop:
 	return apiServer.Shutdown(shutdownCtx)
 }
 
-// projectWatchInterval is how often the sites' project files are checked for changes.
+// projectWatchInterval is how often the sites and their project files are checked for changes.
 var projectWatchInterval = 3 * time.Second
 
-// projectFiles fingerprints the sites' project files (.flockrc, .nvmrc, .node-version, also in
-// parent directories) by size and modification time.
+// projectFiles fingerprints the sites, so folders added to or removed from a parked path count,
+// and their project files (.flockrc, .nvmrc, .node-version, also in parent directories) by size
+// and modification time.
 func (d *daemon) projectFiles() string {
 	d.mu.Lock()
 	cfg := d.cfg
@@ -379,6 +381,7 @@ func (d *daemon) projectFiles() string {
 	var b strings.Builder
 	seen := map[string]bool{}
 	for _, site := range cfg.AllSites() {
+		fmt.Fprintf(&b, "site %s %s\n", site.Name, site.Path)
 		for _, file := range project.Files(site.Path) {
 			if seen[file] {
 				continue

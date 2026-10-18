@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -268,6 +269,45 @@ func TestReloadMovesServicesToNewPorts(t *testing.T) {
 	if status.Mail != "127.0.0.1:"+strconv.Itoa(cfg.Ports.SMTP) {
 		t.Fatalf("mail did not move: %s (warnings %v)", status.Mail, status.Warnings)
 	}
+}
+
+func TestFoldersInParkedPathsAreFollowed(t *testing.T) {
+	projectWatchInterval = 50 * time.Millisecond
+	t.Cleanup(func() { projectWatchInterval = 3 * time.Second })
+
+	parked := t.TempDir()
+	root, _ := testRoot(t, func(cfg *config.Config) { cfg.Parked = []string{parked} })
+	client := startDaemon(t, root)
+
+	hasSite := func(name string) bool {
+		status, _ := client.Status(context.Background())
+		for _, s := range status.Sites {
+			if s.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	waitFor := func(want bool) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for hasSite("acme") != want {
+			if time.Now().After(deadline) {
+				t.Fatalf("acme listed = %v, want %v", !want, want)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+
+	if err := os.Mkdir(filepath.Join(parked, "acme"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(true)
+
+	if err := os.Remove(filepath.Join(parked, "acme")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(false)
 }
 
 func containsText(list []string, needle string) bool {
