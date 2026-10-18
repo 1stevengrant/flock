@@ -444,9 +444,10 @@ struct ServiceInstallForm: View {
 
         VStack(spacing: 12) {
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-                if options.count > 1 {
-                    GridRow {
-                        Text("Version").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                GridRow {
+                    Text("Version").foregroundStyle(.secondary).fixedSize().gridColumnAlignment(.trailing)
+                    // With one version there's nothing to pick, but the row still says what installs.
+                    if options.count > 1 {
                         Picker("Version", selection: Binding(get: { version ?? "" }, set: { version = $0 })) {
                             ForEach(options) { option in
                                 Text(option.label).tag(option.id)
@@ -454,10 +455,12 @@ struct ServiceInstallForm: View {
                         }
                         .labelsHidden()
                         .fixedSize()
+                    } else if let only = options.first {
+                        Text(only.label).monospacedDigit().fixedSize()
                     }
                 }
                 GridRow {
-                    Text("Port").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                    Text("Port").foregroundStyle(.secondary).fixedSize().gridColumnAlignment(.trailing)
                     TextField("Port", text: $portText)
                         .labelsHidden()
                         .monospacedDigit()

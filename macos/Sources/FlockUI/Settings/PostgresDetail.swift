@@ -161,28 +161,6 @@ extension PostgresMajor.Busy {
     }
 }
 
-extension PostgresMajor {
-    /// "Until Nov 2030", tinted when the end is near or past.
-    var supportLabel: (text: String, warning: Bool)? {
-        switch support() {
-        case .unknown: nil
-        case let .supported(until): ("Until \(Formats.monthYear(until))", false)
-        case let .endingSoon(date): ("Support ends \(Formats.monthYear(date))", true)
-        case let .ended(date): ("End of life since \(Formats.monthYear(date))", true)
-        }
-    }
-
-    /// The help text for the support label.
-    var supportHelp: String {
-        switch support() {
-        case .unknown: ""
-        case let .supported(until): "The PostgreSQL project fixes bugs and security issues in \(major) until \(until.formatted(date: .long, time: .omitted))."
-        case let .endingSoon(date): "PostgreSQL \(major) gets its last fixes on \(date.formatted(date: .long, time: .omitted)). Consider moving to a newer version."
-        case let .ended(date): "PostgreSQL \(major) hasn't had security fixes since \(date.formatted(date: .long, time: .omitted))."
-        }
-    }
-}
-
 /// The version that runs: state, version, port, data size and its update.
 private struct ActiveServerCard: View {
     @Environment(AppModel.self) private var model
@@ -202,13 +180,7 @@ private struct ActiveServerCard: View {
                 statePill(busy)
             }
 
-            HStack(spacing: 18) {
-                fact("Databases", major.hasData ? Formats.bytes(major.dataSize) : "None yet")
-                if let support = major.supportLabel {
-                    fact("Support", support.text, warning: support.warning)
-                        .help(major.supportHelp)
-                }
-            }
+            fact("Databases", major.hasData ? Formats.bytes(major.dataSize) : "None yet")
 
             if !major.yanked.isEmpty {
                 Label(major.update ? "This build was withdrawn: \(major.yanked) — update to replace it" : "This build was withdrawn: \(major.yanked)",
@@ -245,10 +217,10 @@ private struct ActiveServerCard: View {
         }
     }
 
-    private func fact(_ title: String, _ value: String, warning: Bool = false) -> some View {
+    private func fact(_ title: String, _ value: String) -> some View {
         HStack(spacing: 6) {
             Text(title).foregroundStyle(.secondary)
-            Text(value).monospacedDigit().foregroundStyle(warning ? Color.orange : .primary)
+            Text(value).monospacedDigit()
         }
         .font(.callout)
     }
@@ -315,27 +287,12 @@ private struct PostgresMajorRow: View {
 
     @ViewBuilder
     private var caption: some View {
-        let support = major.supportLabel
-        let kept = !major.isInstalled && major.hasData ? "\(Formats.bytes(major.dataSize)) kept" : nil
-        if support != nil || kept != nil {
-            HStack(spacing: 4) {
-                if let support {
-                    if support.warning {
-                        Image(systemName: "exclamationmark.triangle.fill").imageScale(.small)
-                    }
-                    Text(support.text)
-                }
-                if support != nil, kept != nil {
-                    Text("·")
-                }
-                if let kept {
-                    Text(kept).help("The databases of PostgreSQL \(major.major) are kept. Install it again to use them.")
-                }
-            }
-            .font(.caption)
-            .lineLimit(1)
-            .foregroundStyle(support?.warning == true ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.tertiary))
-            .help(major.supportHelp)
+        if !major.isInstalled && major.hasData {
+            Text("\(Formats.bytes(major.dataSize)) kept")
+                .font(.caption)
+                .lineLimit(1)
+                .foregroundStyle(.tertiary)
+                .help("The databases of PostgreSQL \(major.major) are kept. Install it again to use them.")
         }
     }
 
@@ -442,15 +399,10 @@ private struct EmptyPostgres: View {
 
     private var portText: String { portState.wrappedValue ?? String(versions.port) }
 
-    /// "17 (17.6) — Until Nov 2029", or its kept databases.
+    /// "17 (17.6)", or "17 (17.6) — your databases" when its databases are kept.
     private func optionLabel(_ major: PostgresMajor) -> String {
-        var label = major.latest.isEmpty ? major.major : "\(major.major) (\(major.latest))"
-        if major.hasData {
-            label += " — your databases"
-        } else if let support = major.supportLabel {
-            label += " — \(support.text)"
-        }
-        return label
+        let label = major.latest.isEmpty ? major.major : "\(major.major) (\(major.latest))"
+        return major.hasData ? label + " — your databases" : label
     }
 
     /// The port belongs to PostgreSQL, not to a version, so it is set before the install.

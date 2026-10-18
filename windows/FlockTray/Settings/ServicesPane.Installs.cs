@@ -139,15 +139,7 @@ internal sealed partial class ServicesPane
     private static string MajorLabel(PostgresMajor major)
     {
         var label = major.Latest.Length > 0 ? $"{major.Major} ({major.Latest})" : major.Major;
-        if (major.HasData)
-        {
-            label += " — your databases";
-        }
-        else if (major.EndOfLifeState(Today) is EndOfLife.Soon or EndOfLife.Past)
-        {
-            label += $" — end of life {Month(major.EolDate!.Value)}";
-        }
-        return label;
+        return major.HasData ? label + " — your databases" : label;
     }
 
     /// <summary>The first install: the port belongs to PostgreSQL, not to a version, so it is set first.</summary>
@@ -296,28 +288,8 @@ internal sealed partial class ServicesPane
         {
             Add(major.IsInstalled ? $"{Ui.Bytes(major.DataSize)} of data" : $"databases kept ({Ui.Bytes(major.DataSize)})");
         }
-        if (major.EolDate is { } eol)
-        {
-            switch (major.EndOfLifeState(Today))
-            {
-                case EndOfLife.Past:
-                    Add($"end of life since {Month(eol)}", Ui.Caution);
-                    break;
-                case EndOfLife.Soon:
-                    Add($"end of life {Month(eol)}", Ui.Caution);
-                    break;
-                default:
-                    Add($"supported until {Month(eol)}", Ui.TertiaryText);
-                    break;
-            }
-            ToolTipService.SetToolTip(text, $"PostgreSQL {major.Major} gets fixes upstream until {eol.ToString("D", CultureInfo.CurrentCulture)}; after that there are no more security updates.");
-        }
         return text;
     }
-
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
-
-    private static string Month(DateOnly date) => date.ToString("MMM yyyy", CultureInfo.CurrentCulture);
 
     private Button More(PostgresVersions versions, PostgresMajor major)
     {
@@ -514,10 +486,9 @@ internal sealed partial class ServicesPane
                 pickedLine[id] = version;
             }
         };
-        if (versions.Count > 1)
-        {
-            form.Children.Add(picker);
-        }
+        // With one version there's nothing to pick, but the box still says what installs.
+        picker.IsEnabled = versions.Count > 1;
+        form.Children.Add(picker);
 
         var portBox = new NumberBox
         {
