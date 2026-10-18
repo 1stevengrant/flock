@@ -179,7 +179,7 @@ struct AboutPane: View {
             .font(.callout)
             HStack {
                 Button("Data Folder") { reveal(FlockPaths.root.path) }
-                Button("Laravel Docs") { NSWorkspace.shared.open(URL(string: "https://laravel.com/docs")!) }
+                Button("Flock Docs") { NSWorkspace.shared.open(URL(string: "https://flockphp.com/docs")!) }
                 Button("License") { NSWorkspace.shared.open(URL(string: "https://github.com/flock-php/flock/blob/main/LICENSE")!) }
             }
             Text("Copyright © Guava s.r.o. Licensed under the AGPL-3.0.")
