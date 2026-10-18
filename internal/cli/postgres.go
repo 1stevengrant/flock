@@ -17,91 +17,6 @@ import (
 	"flock/internal/postgres"
 )
 
-func newPostgresCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "postgres",
-		Short: "Switch, update and list the PostgreSQL versions, and create databases (`flock services install postgres` installs it)",
-	}
-
-	use := &cobra.Command{
-		Use:   "use <major>",
-		Short: "Run another installed PostgreSQL version (each version keeps its own databases)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return postgresOperation(cmd, args[0], "switching to", func(ctx context.Context, ops pgOps) error {
-				return ops.Activate(ctx, args[0])
-			})
-		},
-	}
-
-	update := &cobra.Command{
-		Use:   "update [major]",
-		Short: "Update a PostgreSQL version to its newest release, keeping its databases (default: the active version)",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			major := ""
-			if len(args) > 0 {
-				major = args[0]
-			} else {
-				s, err := load()
-				if err != nil {
-					return err
-				}
-				if major = postgres.MajorOf(s.cfg.Services.Postgres); major == "" {
-					return errors.New("which version? e.g. `flock postgres update 18`")
-				}
-			}
-			return postgresOperation(cmd, major, "updating", func(ctx context.Context, ops pgOps) error {
-				return ops.Update(ctx, major)
-			})
-		},
-	}
-
-	list := &cobra.Command{
-		Use:   "list",
-		Short: "List the PostgreSQL versions with what is installed, updates and data sizes",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := load()
-			if err != nil {
-				return err
-			}
-			ops, err := postgresOps(cmd.Context(), s)
-			if err != nil {
-				return err
-			}
-			v, err := ops.Versions(cmd.Context())
-			if err != nil {
-				return err
-			}
-			printPostgresVersions(cmd.OutOrStdout(), v)
-			return nil
-		},
-	}
-
-	createDB := &cobra.Command{
-		Use:   "create-db <name>...",
-		Short: "Create databases (no-op when they exist)",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			s, err := load()
-			if err != nil {
-				return err
-			}
-			for _, name := range args {
-				if err := postgres.CreateDatabase(cmd.Context(), s.cfg.Ports.Postgres, name); err != nil {
-					return fmt.Errorf("create %s: %w", name, err)
-				}
-				cmd.Printf("database %s ready\n", name)
-			}
-			return nil
-		},
-	}
-
-	cmd.AddCommand(use, update, list, createDB)
-	return cmd
-}
-
 // postgresOperation runs one change and prints the resulting state of major.
 func postgresOperation(cmd *cobra.Command, major, what string, do func(ctx context.Context, ops pgOps) error) error {
 	s, err := load()
@@ -114,8 +29,8 @@ func postgresOperation(cmd *cobra.Command, major, what string, do func(ctx conte
 	return runPostgres(ctx, s, cmd.OutOrStdout(), cmd.ErrOrStderr(), major, what, do)
 }
 
-// isPostgres reports whether a service id names PostgreSQL, which `flock services` installs and
-// removes through its own manager (several majors side by side) instead of the catalog.
+// isPostgres reports whether a service id names PostgreSQL, which `flock services` manages
+// through its own manager (several majors side by side) instead of the catalog.
 func isPostgres(id string) bool {
 	switch strings.ToLower(id) {
 	case "postgres", "postgresql", "pgsql":
@@ -136,6 +51,19 @@ func installPostgres(ctx context.Context, s *state, version string, out, errOut 
 	}
 	return runPostgres(ctx, s, out, errOut, major, "installing", func(ctx context.Context, ops pgOps) error {
 		return ops.Install(ctx, major)
+	})
+}
+
+// updatePostgres updates a major to its newest build, keeping its databases (for
+// `flock services update postgres`); "" is the active one.
+func updatePostgres(ctx context.Context, s *state, major string, out, errOut io.Writer) error {
+	if major == "" {
+		if major = postgres.MajorOf(s.cfg.Services.Postgres); major == "" {
+			return errors.New("which version? e.g. `flock services update postgres 18`")
+		}
+	}
+	return runPostgres(ctx, s, out, errOut, major, "updating", func(ctx context.Context, ops pgOps) error {
+		return ops.Update(ctx, major)
 	})
 }
 
