@@ -108,14 +108,25 @@ public sealed class Updater(Func<bool> takesBetas, Action changed)
     public async Task CheckAndInstallAsync()
     {
         await CheckAsync(userInitiated: true);
-        if (Available is not null)
+        await InstallAvailableAsync();
+    }
+
+    /// <summary>
+    /// Installs the newest version: the one the last check found may have been superseded since
+    /// (checks run daily), so it reads the feed again first.
+    /// </summary>
+    public async Task InstallAsync()
+    {
+        if (Available is null || State != Phase.Idle)
         {
-            await InstallAsync();
+            return;
         }
+        await CheckAsync(userInitiated: true);
+        await InstallAvailableAsync();
     }
 
     /// <summary>Downloads and runs the installer of the available update; the app quits for it.</summary>
-    public async Task InstallAsync()
+    private async Task InstallAvailableAsync()
     {
         if (Available is not { } update || State != Phase.Idle)
         {
