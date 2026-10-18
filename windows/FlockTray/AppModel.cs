@@ -57,10 +57,55 @@ public sealed class AppModel
     /// <summary>The app is replacing the installed CLI with its bundled one.</summary>
     public bool IsUpdating { get; private set; }
 
+    /// <summary>The setup window runs `flock install`, which registers and starts the daemon before its last steps.</summary>
+    private bool settingUp;
+
     /// <summary>"Running · v1.2", "Needs attention · v1.2", "Not running" (or "Not set up", "Updating…").</summary>
     public string Headline => IsUpdating ? "Updating…"
+        // Before the setup is done, a daemon that answers is the setup's (it may still fail).
+        : NeedsSetup ? "Not set up"
         : Status is { } s ? $"{(s.IsDegraded ? "Needs attention" : "Running")} · v{s.Version}"
-        : NeedsSetup ? "Not set up" : "Not running";
+        : "Not running";
+
+    /// <summary>Runs the bundled `flock install` for the setup window.</summary>
+    public async Task<Installation.Result> SetUpAsync(Action<string> onLine)
+    {
+        settingUp = true;
+        try
+        {
+            var result = await Installation.InstallAsync(onLine);
+            NeedsSetup = !Installation.IsSetUp;
+            if (result.Ok)
+            {
+                Installation.RecordInstalled();
+            }
+            return result;
+        }
+        finally
+        {
+            settingUp = false;
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Reads again whether Flock is set up, when the panel opens: `flock install` or `flock uninstall`
+    /// in a terminal changes it while the app runs. Not during the app's own setup or update, which
+    /// register the daemon before they are done.
+    /// </summary>
+    public async Task RefreshSetupAsync()
+    {
+        if (settingUp || IsUpdating || Installation.BundledFlock is null)
+        {
+            return;
+        }
+        var needed = await Task.Run(() => !Installation.IsSetUp);
+        if (needed != NeedsSetup && !settingUp && !IsUpdating)
+        {
+            NeedsSetup = needed;
+            Changed?.Invoke();
+        }
+    }
 
     /// <summary>
     /// Runs the bundled `flock install` after the app was updated. It restarts the daemon; Windows

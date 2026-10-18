@@ -95,14 +95,14 @@ public sealed partial class App : Application, IXamlMetadataProvider
     /// <param name="extension">.ico for the notification area; .png inside windows (WinUI scales up an .ico's smallest image).</param>
     public static string TrayIconPath(AppModel model, bool light, string extension = ".ico")
     {
-        var state = !model.IsRunning ? "TrayStopped" : model.IsDegraded ? "TrayWarning" : "Tray";
+        var state = !model.IsRunning || model.NeedsSetup ? "TrayStopped" : model.IsDegraded ? "TrayWarning" : "Tray";
         return Path.Combine(AppContext.BaseDirectory, "Assets", $"{state}.{(light ? "Light" : "Dark")}{extension}");
     }
 
     private void UpdateTray()
     {
         var tooltip = "Flock — " + Model.Headline;
-        if (Model.Status is { Warnings.Count: > 0 } status)
+        if (Model.Status is { Warnings.Count: > 0 } status && !Model.NeedsSetup)
         {
             tooltip += "\n" + status.Warnings[0];
         }

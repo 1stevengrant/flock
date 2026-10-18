@@ -79,7 +79,7 @@ internal sealed class SetupWindow : FlockWindow
         log.Text = "";
         Render(Stage.Running);
 
-        var result = await Installation.InstallAsync(line =>
+        var result = await model.SetUpAsync(line =>
         {
             output += line + "\n";
             log.Text = output.TrimEnd();
@@ -87,11 +87,6 @@ internal sealed class SetupWindow : FlockWindow
         output = result.Output;
         log.Text = output;
 
-        model.NeedsSetup = !Installation.IsSetUp;
-        if (result.Ok)
-        {
-            Installation.RecordInstalled();
-        }
         Render(result.Ok ? Stage.Done : Stage.Failed);
         await model.RefreshAsync();
     }

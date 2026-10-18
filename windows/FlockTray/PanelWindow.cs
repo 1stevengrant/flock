@@ -87,6 +87,7 @@ internal sealed partial class PanelWindow : Window
         Activate();
         Native.SetForegroundWindow(hwnd);
         _ = model.RefreshAsync();
+        _ = model.RefreshSetupAsync();
     }
 
     public void Hide()
@@ -156,7 +157,8 @@ internal sealed partial class PanelWindow : Window
             root.Children.Add(banner);
         }
 
-        if (model.Status is { } status)
+        // Before the setup is done, a daemon that answers is the setup's (it may still fail).
+        if (model.Status is { } status && !model.NeedsSetup)
         {
             if (status.Warnings.Count > 0)
             {

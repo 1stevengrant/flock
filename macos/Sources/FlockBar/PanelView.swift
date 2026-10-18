@@ -19,7 +19,8 @@ struct PanelView: View {
                 errorBanner(message)
             }
 
-            if let status = model.status {
+            // Before the setup is done, a daemon that answers is the setup's (it may still fail).
+            if let status = model.status, !model.needsSetup {
                 if !status.warnings.isEmpty {
                     warnings(status.warnings)
                 }
@@ -40,6 +41,7 @@ struct PanelView: View {
         }
         .padding(14)
         .frame(width: 340)
+        .onAppear { model.refreshSetup() }
     }
 
     // MARK: Sections
