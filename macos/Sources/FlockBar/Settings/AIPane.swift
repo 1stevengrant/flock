@@ -6,7 +6,11 @@ import SwiftUI
 struct AIPane: View {
     @Environment(AppModel.self) private var model
     /// The client being added or removed.
-    @State private var working: String?
+    private let workingState = State<String?>(initialValue: nil)
+    private var working: String? {
+        get { workingState.wrappedValue }
+        nonmutating set { workingState.wrappedValue = newValue }
+    }
 
     var body: some View {
         let store = model.settings

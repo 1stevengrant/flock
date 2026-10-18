@@ -192,14 +192,7 @@ struct PanelView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(sites) { site in
-                            SiteRow(site: site) { model.open(site) }
-                        }
-                    }
-                }
-                .frame(maxHeight: 240)
+                SiteList(sites: sites) { model.open($0) }
             }
         }
     }
@@ -313,6 +306,33 @@ private struct ServiceRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
+    }
+}
+
+/// The panel sizes itself to its content's ideal size, and a ScrollView has none of its own, so
+/// the list is as tall as its rows and scrolls past 240pt.
+private struct SiteList: View {
+    let sites: [Status.Site]
+    let open: (Status.Site) -> Void
+
+    private let contentHeightState = State<CGFloat>(initialValue: 0)
+    private var contentHeight: CGFloat {
+        get { contentHeightState.wrappedValue }
+        nonmutating set { contentHeightState.wrappedValue = newValue }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(sites) { site in
+                    SiteRow(site: site) { open(site) }
+                }
+            }
+        }
+        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
+            contentHeight = height
+        }
+        .frame(height: min(contentHeight, 240))
     }
 }
 
