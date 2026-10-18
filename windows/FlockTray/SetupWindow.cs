@@ -122,10 +122,8 @@ internal sealed class SetupWindow : FlockWindow
         output = result.Output;
         log.Text = output;
 
-        model.NeedsSetup = !Installation.IsSetUp;
         if (result.Ok)
         {
-            Installation.RecordInstalled();
             try
             {
                 Native.StartsAtSignIn = startup.IsChecked == true;
