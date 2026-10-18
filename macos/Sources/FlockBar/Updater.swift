@@ -5,7 +5,7 @@ import Observation
 /// The app's own updates, through Sparkle. It checks the appcast (SUFeedURL in build-app.sh) once a
 /// day and installs a new version once the user confirms; the relaunched app then updates the CLI
 /// and the daemon (AppModel.updateInstallation). Betas are offered while the daemon follows the beta
-/// channel. Development builds (CFBundleVersion 0, no SUPublicEDKey) don't update.
+/// channel, and to a beta on any channel until the release it leads to. Development builds (CFBundleVersion 0, no SUPublicEDKey) don't update.
 @MainActor
 @Observable
 final class Updater: NSObject {
@@ -71,9 +71,10 @@ final class Updater: NSObject {
 }
 
 extension Updater: SPUUpdaterDelegate {
-    /// Beta items (`<sparkle:channel>beta`) on the beta and experimental channels; stable items always.
+    /// Beta items (`<sparkle:channel>beta`) on the beta and experimental channels, and while a beta
+    /// runs; stable items always.
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        channel == "beta" || channel == "experimental" ? ["beta"] : []
+        channel == "beta" || channel == "experimental" || Self.appVersion.contains("-beta.") ? ["beta"] : []
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
