@@ -141,7 +141,7 @@ internal sealed class AboutPane(SettingsWindow window, AppModel model) : Pane(wi
                 Ui.Setting("License", "Copyright © Guava s.r.o. Licensed under the AGPL-3.0.", Ui.Button("View", () => Native.Open("https://github.com/flock-php/flock/blob/main/LICENSE")))),
             Ui.Section("Uninstall",
                 Ui.Setting("Uninstall Flock", "Stops Flock and removes it from this PC. Your sites, databases and settings are kept.",
-                    Ui.Button("Uninstall…", () => _ = ConfirmUninstall()))));
+                    Ui.Button("Uninstall Flock…", () => _ = ConfirmUninstall()))));
     }
 
     private async Task ConfirmUninstall()
