@@ -17,14 +17,25 @@ import (
 	"flock/internal/certs"
 )
 
+// freePort returns a port that's free for TCP and UDP: Caddy also listens for HTTP/3 over
+// UDP, and Windows can reserve a port for UDP that's free for TCP.
 func freePort(t *testing.T) int {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	for range 20 {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+		pc, err := net.ListenPacket("udp", fmt.Sprintf("127.0.0.1:%d", port))
+		ln.Close()
+		if err == nil {
+			pc.Close()
+			return port
+		}
 	}
-	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port
+	t.Fatal("no port is free for both TCP and UDP")
+	return 0
 }
 
 // TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS runs the embedded Caddy and makes real

@@ -39,16 +39,28 @@ func shortTempDir(t *testing.T) string {
 	return dir
 }
 
+// freePort returns a port that's free for TCP and UDP: Caddy also listens for HTTP/3 over
+// UDP, and Windows can reserve a port for UDP that's free for TCP.
 func freePort(t *testing.T) int {
 	t.Helper()
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
+	for range 20 {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+		pc, err := net.ListenPacket("udp", "127.0.0.1:"+strconv.Itoa(port))
+		ln.Close()
+		if err == nil {
+			pc.Close()
 
-	return ln.Addr().(*net.TCPAddr).Port
+			return port
+		}
+	}
+	t.Fatal("no port is free for both TCP and UDP")
+
+	return 0
 }
 
 // testRoot writes a config.json that only uses free high ports.
