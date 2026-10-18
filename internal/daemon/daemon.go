@@ -941,7 +941,7 @@ func (d *daemon) Services() []api.Service {
 			Env: fmt.Sprintf("MAIL_MAILER=smtp\nMAIL_HOST=127.0.0.1\nMAIL_PORT=%d\nMAIL_USERNAME=${APP_NAME}\nMAIL_PASSWORD=null\nMAIL_SCHEME=null", p.SMTP),
 			URL: fmt.Sprintf("smtp://127.0.0.1:%d", p.SMTP)},
 		{ID: "dumps", Name: "Dump server", Category: "Debugging", Port: p.Dumps, Installed: true, Enabled: cfg.Dumps, Running: d.procUp("dump-server"), Stoppable: true,
-			Env: fmt.Sprintf("VAR_DUMPER_FORMAT=server\nVAR_DUMPER_SERVER=127.0.0.1:%d", p.Dumps), Log: "dump-server"},
+			Log: "dump-server"},
 	}
 	if runtime.GOOS != "windows" {
 		services = append(services, api.Service{ID: "dns", Name: "DNS (*." + cfg.TLD + ")", Category: "Core", Port: p.DNS, Installed: true, Enabled: true, Running: dnsUp,

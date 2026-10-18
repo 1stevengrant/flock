@@ -56,7 +56,7 @@ internal sealed class DumpsPane(SettingsWindow window, AppModel model) : Pane(wi
 
         return Ui.Column(0,
             Ui.Section(null,
-                Ui.Setting("Capture dumps", "Works by setting VAR_DUMPER_FORMAT=server for PHP; turn it off to see dumps in the page again.", capture),
+                Ui.Setting("Capture dumps", "Turn it off to see dumps in the page again.", capture),
                 Ui.Setting("Captured", (Model.Status?.DumpCount ?? 0).ToString(System.Globalization.CultureInfo.CurrentCulture),
                     Ui.Button("Open Dumps", () => App.Current.Open(WindowKind.Dumps)))),
             Ui.Section("Sources", Ui.Setting("Open files in", "Used when clicking a dump's file and line.", editor)));
