@@ -27,8 +27,12 @@
   "xdebug": true,
   "xdebug_breakpoints": false,
   "dumps": true,
+  "capture_off": [],
+  "dumps_in_page": false,
+  "capture_unsupported": [],
   "mail_count": 3,
-  "dump_count": 4,
+  "dump_count": 3,
+  "event_count": 10,
   "sites": [
     {
       "name": "acme",
