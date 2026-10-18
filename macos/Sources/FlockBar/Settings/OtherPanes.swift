@@ -53,22 +53,40 @@ struct DumpsPane: View {
 
     var body: some View {
         let capturing = model.status?.dumps == true
+        let off = Set(model.status?.captureOff ?? [])
+        let unsupported = model.status?.captureUnsupported ?? []
 
         VStack(spacing: 0) {
-            PaneHeader(title: "Dumps", subtitle: "Send dump() and dd() output to Flock instead of the page or terminal — no changes to your projects.")
+            PaneHeader(title: "Dumps", subtitle: "Send dump() and dd() output, queries, logs, views and jobs to Flock instead of the page or terminal — no changes to your projects.")
             Form {
                 Section {
-                    Toggle("Capture dumps", isOn: Binding(get: { capturing }, set: { on in Task { await model.setDumps(on, from: .settings) } }))
+                    Toggle("Capture", isOn: Binding(get: { capturing }, set: { on in Task { await model.setDumps(on, from: .settings) } }))
                     LabeledContent("Captured") {
                         HStack {
-                            Text(String(model.status?.dumpCount ?? 0))
+                            Text("\(model.status?.dumpCount ?? 0) dumps, \(model.status?.eventCount ?? 0) events")
                             Button("Open Dumps") { openWindow.activating(WindowID.dumps) }
                         }
                     }
                 } footer: {
-                    Text("Works by setting VAR_DUMPER_FORMAT=server for PHP; turn it off to see dumps in the page again.")
+                    Text("Turn it off to see dumps in the page again.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section {
+                    ForEach(Event.Kind.allCases) { kind in
+                        Toggle(kind.title, isOn: Binding(get: { !off.contains(kind.rawValue) },
+                                                         set: { on in Task { await model.setCapture(kind, on, from: .settings) } }))
+                    }
+                    Toggle("Show dump() output in the page too", isOn: Binding(get: { model.status?.dumpsInPage == true },
+                                                                             set: { on in Task { await model.setDumpsInPage(on, from: .settings) } }))
+                } header: {
+                    Text("While capturing")
+                } footer: {
+                    Text(unsupported.isEmpty
+                        ? "dd() always shows in the page too, as it ends the request."
+                        : "dd() always shows in the page too, as it ends the request. PHP \(ListFormatter.localizedString(byJoining: unsupported)) only \(unsupported.count == 1 ? "captures" : "capture") dumps: \(unsupported.count == 1 ? "its build has" : "their builds have") no agent extension yet.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!capturing)
                 Section("Sources") {
                     Picker("Open files in", selection: $editorID) {
                         ForEach(Editor.allCases) { Text($0.name).tag($0.rawValue) }

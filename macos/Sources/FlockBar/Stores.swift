@@ -71,13 +71,14 @@ final class MailStore {
     }
 }
 
-/// Captured dump()/dd() output for the Dumps window.
+/// Captured dump()/dd() output and the PHP agent's events (queries, logs, ...) for the Dumps window.
 @MainActor
 @Observable
 final class DumpStore {
     private let client: FlockClient
 
     var dumps: [Dump] = []
+    var events: [Event] = []
     var header = ""
     var error: String?
     var isVisible = false
@@ -88,13 +89,18 @@ final class DumpStore {
 
     func refresh() async {
         do {
+            async let freshEvents = client.events()
             let fresh = try await client.dumps()
-            // The header only exists once the dump server has run; fetch it when first needed.
+            // The header only exists once a dump was captured; fetch it when first needed.
             if header.isEmpty, !fresh.isEmpty {
                 header = (try? await client.dumpHeader()) ?? ""
             }
             if fresh != dumps {
                 dumps = fresh
+            }
+            let newEvents = try await freshEvents
+            if newEvents != events {
+                events = newEvents
             }
             error = nil
         } catch {
@@ -111,7 +117,9 @@ final class DumpStore {
     func clear() async {
         do {
             try await client.clearDumps()
+            try await client.clearEvents()
             dumps = []
+            events = []
         } catch {
             self.error = error.localizedDescription
         }

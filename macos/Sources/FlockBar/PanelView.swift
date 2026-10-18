@@ -203,7 +203,7 @@ struct PanelView: View {
                 Label("Xdebug", systemImage: "ladybug")
             }
             Toggle(isOn: Binding(get: { status.dumps }, set: { on in Task { await model.setDumps(on) } })) {
-                Label("Capture dumps", systemImage: "tray.and.arrow.down")
+                Label("Capture dumps & queries", systemImage: "tray.and.arrow.down")
             }
         }
         .toggleStyle(.switch)
