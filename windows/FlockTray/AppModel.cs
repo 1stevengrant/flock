@@ -176,7 +176,7 @@ public sealed class AppModel
         {
             _ = Mail.RefreshIfVisibleAsync();
         }
-        if (previous?.DumpCount != fresh.DumpCount)
+        if (previous?.DumpCount != fresh.DumpCount || previous?.EventCount != fresh.EventCount)
         {
             _ = Dumps.RefreshIfVisibleAsync();
         }
@@ -191,6 +191,19 @@ public sealed class AppModel
     public Task SetXdebugBreakpointsAsync(bool on) => UpdateAsync(new SettingsChange(XdebugBreakpoints: on));
 
     public Task SetDumpsAsync(bool on) => UpdateAsync(new SettingsChange(Dumps: on));
+
+    /// <summary>Captures a kind of event (EventKind) again, or stops capturing it.</summary>
+    public Task SetCaptureAsync(string kind, bool on)
+    {
+        var off = (Status?.CaptureOff ?? []).Where(k => k != kind).ToList();
+        if (!on)
+        {
+            off.Add(kind);
+        }
+        return UpdateAsync(new SettingsChange(CaptureOff: off));
+    }
+
+    public Task SetDumpsInPageAsync(bool on) => UpdateAsync(new SettingsChange(DumpsInPage: on));
 
     private async Task UpdateAsync(SettingsChange change)
     {
@@ -345,10 +358,11 @@ public sealed class MailStore(FlockClient client) : Store
     });
 }
 
-/// <summary>Captured dump()/dd() output for the Dumps window.</summary>
+/// <summary>Captured dump()/dd() output, and the queries, logs, views, jobs and requests captured with it, for the Dumps window.</summary>
 public sealed class DumpStore(FlockClient client) : Store
 {
     public List<Dump> Dumps { get; private set; } = [];
+    public List<RuntimeEvent> Events { get; private set; } = [];
     public string Header { get; private set; } = "";
     public bool IsVisible { get; set; }
 
@@ -370,6 +384,21 @@ public sealed class DumpStore(FlockClient client) : Store
         {
             Dumps = fresh;
         }
+
+        // A daemon from before runtime capture has no events.
+        List<RuntimeEvent> events;
+        try
+        {
+            events = await client.EventsAsync();
+        }
+        catch (FlockServerException e) when (e.StatusCode == 404)
+        {
+            events = [];
+        }
+        if (!Json.Same(events, Events))
+        {
+            Events = events;
+        }
     });
 
     public async Task RefreshIfVisibleAsync()
@@ -384,6 +413,14 @@ public sealed class DumpStore(FlockClient client) : Store
     {
         await client.ClearDumpsAsync();
         Dumps = [];
+        try
+        {
+            await client.ClearEventsAsync();
+        }
+        catch (FlockServerException e) when (e.StatusCode == 404)
+        {
+        }
+        Events = [];
     });
 }
 

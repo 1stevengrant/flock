@@ -4,7 +4,10 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Flock.Tray;
 
-/// <summary>A terminal-like timeline: newest request on top, dumps one after another, no sidebar.</summary>
+/// <summary>
+/// A terminal-like timeline: newest request on top, its dumps, queries, logs, views and jobs one
+/// after another, no sidebar.
+/// </summary>
 internal sealed partial class DumpsWindow : FlockWindow
 {
     private readonly AppModel model;
@@ -19,6 +22,10 @@ internal sealed partial class DumpsWindow : FlockWindow
     private readonly AppBarToggleButton capture = new() { Icon = new SymbolIcon(Symbol.Download), Label = "Capture Dumps" };
     private readonly AppBarToggleButton latestOnly = new() { Icon = new SymbolIcon(Symbol.Clock), Label = "Latest Request Only" };
     private readonly AppBarButton clear = new() { Icon = new SymbolIcon(Symbol.Delete), Label = "Clear" };
+    private readonly AppBarButton captureKinds = new() { Icon = new SymbolIcon(Symbol.Filter), Label = "Capture" };
+    private readonly Dictionary<string, ToggleMenuFlyoutItem> kindItems = [];
+    private readonly ToggleMenuFlyoutItem dumpsInPage = new() { Text = "Show dump() in the Page Too" };
+    private readonly MenuFlyoutItem unsupported = new() { IsEnabled = false, Visibility = Visibility.Collapsed };
     private readonly InfoBar error;
     private bool rendering;
 
@@ -51,7 +58,7 @@ internal sealed partial class DumpsWindow : FlockWindow
             prefs.Save();
             Render();
         };
-        ToolTipService.SetToolTip(latestOnly, "Show only the dumps of the latest request or command");
+        ToolTipService.SetToolTip(latestOnly, "Show only the latest request or command");
 
         var editors = new MenuFlyout();
         foreach (var editor in EditorInfo.All)
@@ -65,14 +72,31 @@ internal sealed partial class DumpsWindow : FlockWindow
 
         clear.Click += async (_, _) =>
         {
-            if (await Confirm("Clear all dumps?", "Every captured dump is deleted, from all sites and commands.", "Clear", destructive: true))
+            if (await Confirm("Clear all dumps?", "Every captured dump, query, log, view and job is deleted, from all sites and commands.", "Clear", destructive: true))
             {
                 await store.ClearAsync();
             }
         };
 
+        // What is captured next to the dumps (with the capture extension), and whether dump() still
+        // shows in the page: dd() always does.
+        var kinds = new MenuFlyout();
+        foreach (var kind in EventKind.All)
+        {
+            var item = new ToggleMenuFlyoutItem { Text = EventKind.Name(kind) };
+            item.Click += (_, _) => _ = model.SetCaptureAsync(kind, item.IsChecked);
+            kindItems[kind] = item;
+            kinds.Items.Add(item);
+        }
+        kinds.Items.Add(new MenuFlyoutSeparator());
+        dumpsInPage.Click += (_, _) => _ = model.SetDumpsInPageAsync(dumpsInPage.IsChecked);
+        kinds.Items.Add(dumpsInPage);
+        kinds.Items.Add(unsupported);
+        captureKinds.Flyout = kinds;
+        ToolTipService.SetToolTip(captureKinds, "What is captured next to dump() and dd()");
+
         var toolbar = new CommandBar { DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, HorizontalAlignment = HorizontalAlignment.Right };
-        foreach (var command in new ICommandBarElement[] { capture, latestOnly, editorButton, clear })
+        foreach (var command in new ICommandBarElement[] { capture, captureKinds, latestOnly, editorButton, clear })
         {
             toolbar.PrimaryCommands.Add(command);
         }
@@ -115,27 +139,43 @@ internal sealed partial class DumpsWindow : FlockWindow
         capture.IsChecked = capturing;
         capture.Label = capturing ? "Capturing" : "Capture Dumps";
         capture.IsEnabled = model.Status is not null;
-        clear.IsEnabled = store.Dumps.Count > 0;
+        captureKinds.IsEnabled = model.Status is not null;
+        var off = model.Status?.CaptureOff ?? [];
+        foreach (var (kind, item) in kindItems)
+        {
+            item.IsChecked = !off.Contains(kind);
+        }
+        dumpsInPage.IsChecked = model.Status?.DumpsInPage == true;
+        var only = model.Status?.CaptureUnsupported ?? [];
+        unsupported.Visibility = only.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        unsupported.Text = $"PHP {string.Join(", ", only)}: dumps only";
+        clear.IsEnabled = store.Dumps.Count > 0 || store.Events.Count > 0;
         rendering = false;
         Ui.ShowError(error, store.Error ?? model.ActionError);
 
-        var source = Preferences.Shared.DumpsLatestOnly ? DumpTimeline.LatestGroup(store.Dumps) : store.Dumps;
-        var visible = DumpTimeline.Filter(source, search.Text ?? "");
-        Heading = visible.Count == 0 ? "Dumps" : $"Dumps ({visible.Count})";
+        var (dumps, events) = Preferences.Shared.DumpsLatestOnly
+            ? DumpTimeline.LatestGroup(store.Dumps, store.Events)
+            : (store.Dumps, store.Events.Where(e => e.IsKnown).ToList());
+        var query = search.Text ?? "";
+        var visibleDumps = DumpTimeline.Filter(dumps, query);
+        var visibleEvents = DumpTimeline.Filter(events, query);
+        // Requests show in their group's header; they don't count as entries of their own.
+        var count = visibleDumps.Count + visibleEvents.Count(e => e.Kind != EventKind.Request);
+        Heading = count == 0 ? "Dumps" : $"Dumps ({count})";
 
-        if (visible.Count == 0)
+        if (count == 0)
         {
             UIElement? action = capturing ? null : Ui.Button("Start Capturing", () => _ = model.SetDumpsAsync(true), accent: true);
             content.Content = Ui.EmptyState(Ui.GlyphBug,
-                store.Dumps.Count == 0 ? "No dumps yet" : "No matching dumps",
+                store.Dumps.Count == 0 && store.Events.Count == 0 ? "No dumps yet" : "No matching dumps",
                 capturing
-                    ? "dump() and dd() output from your sites and artisan commands appears here."
+                    ? "dump() and dd() output, queries, logs, views and jobs from your sites and artisan commands appear here."
                     : "Capture is off — turn it on to collect dump() and dd() output here.",
                 action);
             return;
         }
 
-        timeline.Load(DumpTimeline.Html(visible, store.Header, Preferences.Shared.EditorChoice));
+        timeline.Load(DumpTimeline.Html(visibleDumps, visibleEvents, store.Header, Preferences.Shared.EditorChoice));
         content.Content = timeline;
     }
 }

@@ -179,6 +179,71 @@ public class DecodingTests
         Assert.False(status.IsDegraded);
         // Both defaults are set.
         Assert.Null(status.Defaults);
+        // A daemon from before runtime capture: everything captured, nothing unsupported.
+        Assert.Empty(status.CaptureOff);
+        Assert.Empty(status.CaptureUnsupported);
+        Assert.False(status.DumpsInPage);
+        Assert.Equal(0, status.EventCount);
+    }
+
+    [Fact]
+    public void DecodesTheCaptureSettings()
+    {
+        var status = FlockJson.Decode<Status>("""
+            {"version":"dev","dumps":true,"capture_off":["view","job"],"dumps_in_page":true,"event_count":42,
+             "capture_unsupported":["8.1"],"sites":[],"processes":[]}
+            """);
+
+        Assert.Equal(["view", "job"], status.CaptureOff);
+        Assert.True(status.DumpsInPage);
+        Assert.Equal(42, status.EventCount);
+        Assert.Equal(["8.1"], status.CaptureUnsupported);
+
+        var config = FlockJson.Decode<FlockConfig>("""{"tld":"test","dumps":true,"capture_off":null,"dumps_in_page":true}""");
+        Assert.Empty(config.CaptureOff);
+        Assert.True(config.DumpsInPage);
+    }
+
+    [Fact]
+    public void DecodesEveryEventKindAndIgnoresUnknownOnes()
+    {
+        var events = FlockJson.Decode<List<RuntimeEvent>>("""
+            [{"id":"6","kind":"request","time":"2026-10-18T09:40:07.9Z","site":"shop","group":"g1",
+              "request":{"method":"GET","uri":"https://shop.test/spike"},"status_code":200,"duration_ms":31.2},
+             {"id":"5","kind":"job","time":"2026-10-18T09:40:07.8Z","group":"g2","command_line":"artisan queue:work",
+              "job":"App\\Jobs\\SpikeJob","queue":"default","connection":"database","state":"failed","exception":"RuntimeException: boom","duration_ms":5.5},
+             {"id":"4","kind":"view","time":"2026-10-18T09:40:07.7Z","group":"g1","view":"spike","path":"/code/shop/resources/views/spike.blade.php"},
+             {"id":"3","kind":"log","time":"2026-10-18T09:40:07.6Z","group":"g1","level":"warning","message":"spike request","context":{"count":0}},
+             {"id":"2","kind":"query","time":"2026-10-18T09:40:07.5Z","group":"g1","sql":"select * from users where id > ?",
+              "bindings":[0,"a",null],"connection":"sqlite","duration_ms":0.42,
+              "source":{"file":"/code/shop/routes/web.php","line":12,"name":"web.php"},"some_future_field":{"x":1}},
+             {"id":"1","kind":"mail","time":"2026-10-18T09:40:07.4Z","group":"g1"}]
+            """);
+
+        Assert.Equal((200, 31.2), (events[0].StatusCode, events[0].DurationMs));
+        Assert.Equal("GET https://shop.test/spike", events[0].Origin);
+        Assert.Equal(("App\\Jobs\\SpikeJob", "failed", "RuntimeException: boom"), (events[1].Job, events[1].State, events[1].Exception));
+        Assert.Equal("artisan queue:work", events[1].Origin);
+        Assert.Equal("spike", events[2].View);
+        Assert.Equal(("warning", "spike request"), (events[3].Level, events[3].Message));
+        Assert.Contains("\"count\": 0", events[3].ContextText);
+        Assert.Equal("[0, \"a\", null]", events[4].BindingsText);
+        Assert.Equal(("sqlite", 0.42, 12), (events[4].Connection, events[4].DurationMs, events[4].Source?.Line));
+        Assert.Null(events[4].StatusCode);
+        Assert.False(events[5].IsKnown);
+        Assert.True(events[4].IsKnown);
+    }
+
+    [Fact]
+    public void EmptyLogContextShowsNothing()
+    {
+        var events = FlockJson.Decode<List<RuntimeEvent>>("""
+            [{"id":"1","kind":"log","time":"2026-10-18T09:40:07Z","context":{}},{"id":"2","kind":"log","time":"2026-10-18T09:40:07Z"}]
+            """);
+
+        Assert.Equal("", events[0].ContextText);
+        Assert.Equal("", events[1].ContextText);
+        Assert.Equal("", events[1].BindingsText);
     }
 
     [Fact]

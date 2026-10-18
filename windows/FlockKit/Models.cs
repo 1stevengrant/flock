@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Flock.Kit;
@@ -33,9 +34,17 @@ public sealed class Status
     public bool Xdebug { get; init; }
     /// <summary>Sites with PhpStorm breakpoints send every request to Xdebug.</summary>
     public bool XdebugBreakpoints { get; init; }
+    /// <summary>Capture is on: dumps, and with the capture extension queries, logs, views, jobs and requests.</summary>
     public bool Dumps { get; init; }
+    /// <summary>Kinds (EventKind) not captured while capture is on.</summary>
+    public List<string> CaptureOff { get; init; } = [];
+    /// <summary>dump() output also shows in the page or terminal; dd() always does.</summary>
+    public bool DumpsInPage { get; init; }
+    /// <summary>Installed PHP minors without the capture extension: only dumps are captured there.</summary>
+    public List<string> CaptureUnsupported { get; init; } = [];
     public int MailCount { get; init; }
     public int DumpCount { get; init; }
+    public int EventCount { get; init; }
     public List<Site> Sites { get; init; } = [];
     public List<Process> Processes { get; init; } = [];
     public List<string> Warnings { get; init; } = [];
@@ -348,6 +357,107 @@ public sealed class DumpRequest
 {
     public string Method { get; init; } = "";
     public string Uri { get; init; } = "";
+}
+
+/// <summary>Values of RuntimeEvent.Kind, which are also what Status.CaptureOff lists.</summary>
+public static class EventKind
+{
+    public const string Query = "query";
+    public const string Log = "log";
+    public const string View = "view";
+    public const string Job = "job";
+    public const string Request = "request";
+
+    /// <summary>Every kind the timeline renders, in menu order; events of other kinds are ignored.</summary>
+    public static IReadOnlyList<string> All { get; } = [Query, Log, View, Job, Request];
+
+    public static string Name(string kind) => kind switch
+    {
+        Query => "Queries",
+        Log => "Logs",
+        View => "Views",
+        Job => "Jobs",
+        Request => "Requests",
+        _ => kind,
+    };
+}
+
+/// <summary>
+/// An entry of GET /v1/events: a query, log, view, job or request of the same request / CLI run
+/// (Group) as its dumps. The kind-specific fields are only set for their kind.
+/// </summary>
+public sealed class RuntimeEvent
+{
+    public string Id { get; init; } = "";
+    /// <summary>One of EventKind; unknown kinds are kept but not rendered.</summary>
+    public string Kind { get; init; } = "";
+    public DateTimeOffset Time { get; init; }
+    public string Site { get; init; } = "";
+    public string Group { get; init; } = "";
+    public DumpRequest? Request { get; init; }
+    public string? CommandLine { get; init; }
+    /// <summary>The first frame outside vendor/, when known.</summary>
+    public DumpSource? Source { get; init; }
+
+    // query
+    public string Sql { get; init; } = "";
+    public List<JsonElement> Bindings { get; init; } = [];
+    public string Connection { get; init; } = "";
+    /// <summary>Queries, processed or failed jobs and requests.</summary>
+    public double? DurationMs { get; init; }
+
+    // log
+    public string Level { get; init; } = "";
+    public string Message { get; init; } = "";
+    /// <summary>The log context, an object (may be empty).</summary>
+    public JsonElement? Context { get; init; }
+
+    // view
+    public string View { get; init; } = "";
+    public string Path { get; init; } = "";
+
+    // job
+    public string Job { get; init; } = "";
+    public string Queue { get; init; } = "";
+    /// <summary>"processing", "processed" or "failed".</summary>
+    public string State { get; init; } = "";
+    public string Exception { get; init; } = "";
+
+    // request
+    public int? StatusCode { get; init; }
+
+    /// <summary>The kinds the timeline renders (see EventKind.All).</summary>
+    [JsonIgnore]
+    public bool IsKnown => EventKind.All.Contains(Kind);
+
+    /// <summary>"GET https://app.test/x" for requests, the command line for CLI runs.</summary>
+    [JsonIgnore]
+    public string Origin
+    {
+        get
+        {
+            if (Request is { Uri.Length: > 0 })
+            {
+                return $"{Request.Method} {Request.Uri}";
+            }
+            return CommandLine ?? "";
+        }
+    }
+
+    /// <summary>The bindings as JSON ("[0, \"a\"]"); empty without bindings.</summary>
+    [JsonIgnore]
+    public string BindingsText => Bindings.Count == 0 ? "" : "[" + string.Join(", ", Bindings.Select(b => b.GetRawText())) + "]";
+
+    /// <summary>The log context as JSON; empty when there is none or it is empty.</summary>
+    [JsonIgnore]
+    public string ContextText => Context switch
+    {
+        { ValueKind: JsonValueKind.Object } c when c.EnumerateObject().Any() => JsonSerializer.Serialize(c, IndentedJson),
+        { ValueKind: JsonValueKind.Array } c when c.GetArrayLength() > 0 => JsonSerializer.Serialize(c, IndentedJson),
+        _ => "",
+    };
+
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 }
 
 /// <summary>GET /v1/logs</summary>
