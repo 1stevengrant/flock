@@ -321,8 +321,8 @@ var extensions = []string{
 	"apcu", "igbinary", "redis", "imagick", "mongodb", "memcached",
 }
 
-// extensionFile is a shared extension's file in extDir: imagick.so, or php_imagick.dll on Windows.
-func extensionFile(extDir, name string) string {
+// ExtensionFile is a shared extension's file in extDir: imagick.so, or php_imagick.dll on Windows.
+func ExtensionFile(extDir, name string) string {
 	if runtime.GOOS == "windows" {
 		name = "php_" + name
 	}
@@ -391,11 +391,11 @@ func ExtensionsIni(extDir string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "; Managed by Flock — regenerated on install, edit php.ini instead.\nextension_dir = \"%s\"\n", extDir)
 	// opcache is compiled in from PHP 8.5 on, and into the macOS builds from PHP 8.0 on.
-	if fileExists(extensionFile(extDir, "opcache")) {
+	if fileExists(ExtensionFile(extDir, "opcache")) {
 		b.WriteString("zend_extension = opcache\n")
 	}
 	for _, name := range extensions {
-		if fileExists(extensionFile(extDir, name)) {
+		if fileExists(ExtensionFile(extDir, name)) {
 			fmt.Fprintf(&b, "extension = %s\n", name)
 		}
 	}

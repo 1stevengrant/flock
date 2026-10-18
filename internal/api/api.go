@@ -28,25 +28,31 @@ var ErrDaemonNotRunning = errors.New("flock daemon is not running (start it with
 
 // Status describes the running daemon.
 type Status struct {
-	Version           string                  `json:"version"`
-	PID               int                     `json:"pid"`
-	StartedAt         time.Time               `json:"started_at"`
-	DNS               DNSStatus               `json:"dns"`
-	HTTPPort          int                     `json:"http_port"`
-	HTTPSPort         int                     `json:"https_port"`
-	Mail              string                  `json:"mail"`
-	Dumps             bool                    `json:"dumps"`
-	MailCount         int                     `json:"mail_count"`
-	DumpCount         int                     `json:"dump_count"`
-	Postgres          string                  `json:"postgres,omitempty"`
-	Valkey            string                  `json:"valkey,omitempty"`
-	Extras            []ExtraStatus           `json:"extras,omitempty"` // installed catalog services
-	Xdebug            bool                    `json:"xdebug"`           // Xdebug detection; see config.Config.Xdebug
-	XdebugBreakpoints bool                    `json:"xdebug_breakpoints"`
-	Sites             []SiteStatus            `json:"sites"`
-	Processes         []supervisor.ProcStatus `json:"processes"`
-	Warnings          []string                `json:"warnings,omitempty"`
-	Channel           string                  `json:"channel"` // see ChannelOf; the apps' own updates follow it too
+	Version     string    `json:"version"`
+	PID         int       `json:"pid"`
+	StartedAt   time.Time `json:"started_at"`
+	DNS         DNSStatus `json:"dns"`
+	HTTPPort    int       `json:"http_port"`
+	HTTPSPort   int       `json:"https_port"`
+	Mail        string    `json:"mail"`
+	Dumps       bool      `json:"dumps"`
+	CaptureOff  []string  `json:"capture_off"`   // event kinds not captured (see config.Config.CaptureOff)
+	DumpsInPage bool      `json:"dumps_in_page"` // dump() shows in the page / terminal too
+	// CaptureUnsupported lists installed PHP versions without the agent's extension: only their
+	// dumps are captured (through the dump server).
+	CaptureUnsupported []string                `json:"capture_unsupported"`
+	MailCount          int                     `json:"mail_count"`
+	DumpCount          int                     `json:"dump_count"`
+	EventCount         int                     `json:"event_count"`
+	Postgres           string                  `json:"postgres,omitempty"`
+	Valkey             string                  `json:"valkey,omitempty"`
+	Extras             []ExtraStatus           `json:"extras,omitempty"` // installed catalog services
+	Xdebug             bool                    `json:"xdebug"`           // Xdebug detection; see config.Config.Xdebug
+	XdebugBreakpoints  bool                    `json:"xdebug_breakpoints"`
+	Sites              []SiteStatus            `json:"sites"`
+	Processes          []supervisor.ProcStatus `json:"processes"`
+	Warnings           []string                `json:"warnings,omitempty"`
+	Channel            string                  `json:"channel"` // see ChannelOf; the apps' own updates follow it too
 	// Defaults is set while there is no default PHP or Node.js yet: the first run installs the
 	// newest stable ones and makes them the defaults.
 	Defaults *DefaultsStatus `json:"defaults,omitempty"`
@@ -167,11 +173,14 @@ type DNSStatus struct {
 
 // Settings are the global toggles a UI can change; nil fields stay as they are.
 type Settings struct {
-	Xdebug            *bool   `json:"xdebug"`
-	XdebugBreakpoints *bool   `json:"xdebug_breakpoints"`
-	Dumps             *bool   `json:"dumps"`
-	DefaultPHP        *string `json:"default_php"`
-	DefaultNode       *string `json:"default_node"`
+	Xdebug            *bool `json:"xdebug"`
+	XdebugBreakpoints *bool `json:"xdebug_breakpoints"`
+	Dumps             *bool `json:"dumps"`
+	// CaptureOff replaces the list of event kinds not captured.
+	CaptureOff  *[]string `json:"capture_off"`
+	DumpsInPage *bool     `json:"dumps_in_page"`
+	DefaultPHP  *string   `json:"default_php"`
+	DefaultNode *string   `json:"default_node"`
 	// Channel is "stable", "beta" or "experimental" (see config.Config.Channel).
 	Channel *string `json:"channel"`
 }
@@ -239,6 +248,7 @@ func NewHandler(b Backend, token string) http.Handler {
 	registerFrankenPHP(mux, b)
 	registerMail(mux, b)
 	registerDumps(mux, b)
+	registerEvents(mux, b)
 	registerLogs(mux, b)
 	registerMCP(mux, b)
 	registerBoost(mux, b)
