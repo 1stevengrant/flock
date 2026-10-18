@@ -337,7 +337,52 @@ func writeExtensionsIni(root, minor string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(dir, "00-flock.ini"), []byte(ExtensionsIni(filepath.Join(Dir(root, minor), "ext"))), 0o644)
+	body := ExtensionsIni(filepath.Join(Dir(root, minor), "ext")) + DefaultsIni(root, minor)
+	return os.WriteFile(filepath.Join(dir, "00-flock.ini"), []byte(body), 0o644)
+}
+
+// defaults are settings Flock wants that PHP's built-in values get wrong for development. They
+// go into Flock's own ini only while the user's php.ini doesn't set them, so php.ini (created
+// before a default was added, or edited since) stays in charge.
+var defaults = []struct{ name, value, why string }{
+	// Without a buffer, the first byte of output (a dump(), a stray echo) sends the headers and
+	// the response then fails with "headers already sent". PHP's development ini has 4096 bytes,
+	// but an HTML dump() alone is about 16 KB (Symfony's script and styles); 1 MiB holds nearly
+	// any dump and still flushes large downloads as they stream.
+	{"output_buffering", "1048576", "so output before the response (a dump()) doesn't send its headers early"},
+}
+
+// DefaultsIni is the part of Flock's ini that applies defaults the version's php.ini doesn't set.
+func DefaultsIni(root, minor string) string {
+	data, _ := os.ReadFile(IniPath(root, minor))
+	var b strings.Builder
+	for _, d := range defaults {
+		if !iniSets(string(data), d.name) {
+			fmt.Fprintf(&b, "; Flock default (set %s in php.ini to change it), %s.\n%s = %s\n", d.name, d.why, d.name, d.value)
+		}
+	}
+	return b.String()
+}
+
+// iniSets reports whether ini assigns directive outside a comment.
+func iniSets(ini, directive string) bool {
+	_, ok := IniValue(ini, directive)
+	return ok
+}
+
+// IniValue is the value ini assigns to directive (the last assignment, unquoted), if any.
+func IniValue(ini, directive string) (value string, ok bool) {
+	for _, line := range strings.Split(ini, "\n") {
+		name, v, found := strings.Cut(strings.TrimSpace(line), "=")
+		if found && strings.EqualFold(strings.TrimSpace(name), directive) {
+			v = strings.TrimSpace(v)
+			if len(v) >= 2 && (v[0] == '"' && v[len(v)-1] == '"' || v[0] == '\'' && v[len(v)-1] == '\'') {
+				v = v[1 : len(v)-1]
+			}
+			value, ok = v, true
+		}
+	}
+	return value, ok
 }
 
 // ExtensionsIni is the ini that points a build at its ext/ directory and loads the extensions
@@ -421,6 +466,7 @@ display_errors = On
 display_startup_errors = On
 error_reporting = E_ALL
 log_errors = On
+output_buffering = 1048576
 date.timezone = UTC
 variables_order = "EGPCS"
 
@@ -438,18 +484,22 @@ curl.cainfo = "%s"
 }
 
 // EnsureIni creates php.ini for a version when it does not exist yet, and (re)writes the ini
-// files Flock manages.
+// files Flock manages (after php.ini, which decides which defaults they carry).
 func EnsureIni(root, minor string) error {
+	if path := IniPath(root, minor); !fileExists(path) {
+		if err := os.MkdirAll(Dir(root, minor), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(DefaultIni(root)), 0o644); err != nil {
+			return err
+		}
+	}
 	for _, write := range []func(root, minor string) error{writeExtensionsIni, writeCLIIni, writeXdebugIni} {
 		if err := write(root, minor); err != nil {
 			return err
 		}
 	}
-	path := IniPath(root, minor)
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	}
-	return os.WriteFile(path, []byte(DefaultIni(root)), 0o644)
+	return nil
 }
 
 // FPMSpec writes the FPM config for a version and returns the process to supervise.
