@@ -94,7 +94,7 @@ func TestCollectorStoresDumpsAndEvents(t *testing.T) {
 func TestSyncWritesTheAgentIniWhereTheExtensionIs(t *testing.T) {
 	root := t.TempDir()
 	for _, minor := range []string{"8.4", "8.5"} {
-		writeFile(t, filepath.Join(php.Dir(root, minor), "bin", "php"), "")
+		writeFile(t, php.Binary(root, minor), "") // php.exe on Windows
 		writeFile(t, php.IniPath(root, minor), "memory_limit = 1G\nauto_prepend_file = \"/app/prepend.php\"\n")
 	}
 	writeFile(t, php.ExtensionPath(root, "8.5", Extension), "")
