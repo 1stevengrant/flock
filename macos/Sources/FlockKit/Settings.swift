@@ -7,6 +7,9 @@ public struct FlockConfig: Decodable, Sendable, Equatable {
     public var defaultNode: String
     public var xdebug: Bool
     public var dumps: Bool
+    /// Event kinds that are not captured (see `Status.captureOff`).
+    public var captureOff: [String]
+    public var dumpsInPage: Bool
     /// The channel of prebuilt packages: "stable", "beta" or "experimental" (`flock channel`).
     public var channel: String
     public var root: String
@@ -23,9 +26,11 @@ public struct FlockConfig: Decodable, Sendable, Equatable {
         public var postgres: Int
         public var valkey: Int
         public var dumps: Int
+        /// Where the PHP agent sends what it captures.
+        public var agent: Int
         public var api: Int
 
-        enum CodingKeys: String, CodingKey { case http, https, dns, smtp, postgres, valkey, dumps, api }
+        enum CodingKeys: String, CodingKey { case http, https, dns, smtp, postgres, valkey, dumps, agent, api }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -37,6 +42,7 @@ public struct FlockConfig: Decodable, Sendable, Equatable {
             postgres = try port(.postgres)
             valkey = try port(.valkey)
             dumps = try port(.dumps)
+            agent = try port(.agent)
             api = try port(.api)
         }
     }
@@ -62,7 +68,7 @@ public struct FlockConfig: Decodable, Sendable, Equatable {
 
     // convertFromSnakeCase turns default_php into defaultPhp, so these keys are spelled out.
     enum CodingKeys: String, CodingKey {
-        case tld, xdebug, dumps, root, ports, parked, php, node
+        case tld, xdebug, dumps, captureOff, dumpsInPage, root, ports, parked, php, node
         case defaultPHP = "defaultPhp"
         case channel
         case defaultNode
@@ -75,6 +81,8 @@ public struct FlockConfig: Decodable, Sendable, Equatable {
         defaultNode = try c.decodeIfPresent(String.self, forKey: .defaultNode) ?? ""
         xdebug = try c.decodeIfPresent(Bool.self, forKey: .xdebug) ?? false
         dumps = try c.decodeIfPresent(Bool.self, forKey: .dumps) ?? false
+        captureOff = try c.decodeIfPresent([String].self, forKey: .captureOff) ?? []
+        dumpsInPage = try c.decodeIfPresent(Bool.self, forKey: .dumpsInPage) ?? false
         channel = try c.decodeIfPresent(String.self, forKey: .channel) ?? "stable"
         root = try c.decodeIfPresent(String.self, forKey: .root) ?? ""
         ports = try c.decode(Ports.self, forKey: .ports)
@@ -146,15 +154,21 @@ public struct SettingsChange: Encodable, Sendable {
     public var xdebug: Bool?
     public var xdebugBreakpoints: Bool?
     public var dumps: Bool?
+    /// Replaces the list of event kinds that are not captured.
+    public var captureOff: [String]?
+    public var dumpsInPage: Bool?
     public var defaultPHP: String?
     public var defaultNode: String?
     /// "stable" or "beta" ("experimental" is set with `flock channel`).
     public var channel: String?
 
-    public init(xdebug: Bool? = nil, xdebugBreakpoints: Bool? = nil, dumps: Bool? = nil, defaultPHP: String? = nil, defaultNode: String? = nil, channel: String? = nil) {
+    public init(xdebug: Bool? = nil, xdebugBreakpoints: Bool? = nil, dumps: Bool? = nil, captureOff: [String]? = nil, dumpsInPage: Bool? = nil,
+                defaultPHP: String? = nil, defaultNode: String? = nil, channel: String? = nil) {
         self.xdebug = xdebug
         self.xdebugBreakpoints = xdebugBreakpoints
         self.dumps = dumps
+        self.captureOff = captureOff
+        self.dumpsInPage = dumpsInPage
         self.defaultPHP = defaultPHP
         self.defaultNode = defaultNode
         self.channel = channel
@@ -163,6 +177,8 @@ public struct SettingsChange: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case xdebug, dumps, channel
         case xdebugBreakpoints = "xdebug_breakpoints"
+        case captureOff = "capture_off"
+        case dumpsInPage = "dumps_in_page"
         case defaultPHP = "default_php"
         case defaultNode = "default_node"
     }

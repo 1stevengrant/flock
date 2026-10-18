@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"flock/internal/binaries"
+	"flock/internal/capture"
 	"flock/internal/catalog"
 	"flock/internal/config"
 	"flock/internal/dumps"
@@ -204,6 +206,39 @@ func TestDumpsAreAttributedToSites(t *testing.T) {
 	}
 	if len(entries) != 2 || entries[0].Site != "blog.test" || entries[1].Site != "shop.test" {
 		t.Fatalf("got %+v", entries)
+	}
+}
+
+func TestCaptureSettingsAndEvents(t *testing.T) {
+	root := t.TempDir()
+	b := &fakeBackend{root: root, sites: []SiteStatus{{Name: "shop", Domain: "shop.test", Path: "/code/shop"}}}
+	srv := serve(t, b, "")
+
+	if resp, body := call(t, "POST", srv.URL+"/v1/settings", "", `{"capture_off":["view","query","view"],"dumps_in_page":true}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("%d %s", resp.StatusCode, body)
+	}
+	if cfg := b.config(t); !slices.Equal(cfg.CaptureOff, []string{"query", "view"}) || !cfg.DumpsInPage {
+		t.Fatalf("got %+v", cfg)
+	}
+	if resp, _ := call(t, "POST", srv.URL+"/v1/settings", "", `{"capture_off":["sql"]}`); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown kinds must be rejected, got %d", resp.StatusCode)
+	}
+
+	src := &dumps.Source{File: "/code/shop/app/Models/User.php", Line: 9}
+	_ = capture.Append(root, capture.Event{Kind: "query", SQL: "select 1", Source: src}, capture.Event{Kind: "log", Message: "hi"})
+	_, body := call(t, "GET", srv.URL+"/v1/events?kind=query", "", "")
+	var events []capture.Event
+	if err := json.Unmarshal([]byte(body), &events); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].SQL != "select 1" || events[0].Site != "shop.test" {
+		t.Fatalf("got %s", body)
+	}
+	if resp, _ := call(t, "GET", srv.URL+"/v1/events?kind=nope", "", ""); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown kind: %d", resp.StatusCode)
+	}
+	if resp, _ := call(t, "DELETE", srv.URL+"/v1/events", "", ""); resp.StatusCode != http.StatusNoContent || capture.Count(root) != 0 {
+		t.Errorf("clear: %d, %d left", resp.StatusCode, capture.Count(root))
 	}
 }
 

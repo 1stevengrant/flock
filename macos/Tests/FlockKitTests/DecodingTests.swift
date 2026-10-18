@@ -239,3 +239,30 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     """)
     #expect(status.sites.map(\.boost) == [.missing, .outdated, .none, .current])
 }
+
+@Test func decodesCaptureSettingsAndDefaultsThemForAnOlderDaemon() throws {
+    let status = try decode(Status.self, """
+    {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","dumps":true,"processes":[],
+     "capture_off":["view","job"],"dumps_in_page":true,"event_count":42,"capture_unsupported":["8.1"]}
+    """)
+    #expect(status.captureOff == ["view", "job"] && status.dumpsInPage && status.eventCount == 42)
+    #expect(status.captureUnsupported == ["8.1"])
+
+    let older = try decode(Status.self, """
+    {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","dumps":true,"processes":[],"capture_off":null}
+    """)
+    #expect(older.captureOff.isEmpty && !older.dumpsInPage && older.eventCount == 0 && older.captureUnsupported.isEmpty)
+
+    let config = try decode(FlockConfig.self, """
+    {"tld":"test","dumps":true,"capture_off":["log"],"dumps_in_page":true,"ports":{"http":80,"dumps":9912,"agent":9913}}
+    """)
+    #expect(config.captureOff == ["log"] && config.dumpsInPage && config.ports.agent == 9913)
+}
+
+@Test func encodesOnlyTheChangedCaptureSettings() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    #expect(String(decoding: try encoder.encode(SettingsChange(captureOff: ["query"])), as: UTF8.self) == #"{"capture_off":["query"]}"#)
+    #expect(String(decoding: try encoder.encode(SettingsChange(captureOff: [])), as: UTF8.self) == #"{"capture_off":[]}"#)
+    #expect(String(decoding: try encoder.encode(SettingsChange(dumpsInPage: false)), as: UTF8.self) == #"{"dumps_in_page":false}"#)
+}

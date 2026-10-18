@@ -212,7 +212,7 @@ func TestToolsAndAnnotations(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"status", "site_info", "list_sites", "list_services", "list_php_versions", "list_node_versions",
-		"get_errors", "get_dumps", "list_mail", "read_mail", "service_logs", "php_extensions"} {
+		"get_errors", "get_dumps", "get_events", "list_mail", "read_mail", "service_logs", "php_extensions"} {
 		if !readOnly[name] {
 			t.Errorf("%s should be a read-only tool", name)
 		}
@@ -222,7 +222,7 @@ func TestToolsAndAnnotations(t *testing.T) {
 			t.Errorf("%s should be a tool that changes things (listed: %v)", name, ok)
 		}
 	}
-	if len(res.Tools) != 18 {
+	if len(res.Tools) != 19 {
 		t.Errorf("got %d tools", len(res.Tools))
 	}
 }
