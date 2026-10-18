@@ -25,6 +25,12 @@ struct SetupWindow: View {
         get { declinedState.wrappedValue }
         nonmutating set { declinedState.wrappedValue = newValue }
     }
+    /// The first run's installs as this window last saw them in the status.
+    private let seenDefaultsState = State<Status.Defaults?>(initialValue: nil)
+    private var seenDefaults: Status.Defaults? {
+        get { seenDefaultsState.wrappedValue }
+        nonmutating set { seenDefaultsState.wrappedValue = newValue }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -55,17 +61,25 @@ struct SetupWindow: View {
                 header("Flock is ready", nil)
                 Form {
                     Section("Next steps") {
+                        runtimes
                         item("Open a new terminal", "Terminals that were already open still have the old PATH.", symbol: "terminal")
                         item("Link a project", "In a Laravel project, run `flock link`: the site is then at http://<folder>.test. `flock secure` adds HTTPS.", symbol: "globe")
-                        item("Install PHP", "Settings → PHP installs versions; running `php` in a terminal offers to install a missing one.", symbol: "chevron.left.forwardslash.chevron.right")
+                        item("Other versions", "Flock installs the newest PHP and Node.js LTS as the defaults. Settings → PHP and Node install other versions.", symbol: "chevron.left.forwardslash.chevron.right")
                     }
                 }
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
                 .scrollDisabled(true)
+                // The status stops listing the installs once both are done; the row keeps their versions.
+                .onChange(of: model.status?.defaults, initial: true) { _, new in
+                    if let new {
+                        seenDefaults = new
+                    }
+                }
                 buttons {
                     Button("Open Settings") {
                         dismissWindow(id: WindowID.setup)
+                        showSettingsPane()
                         openWindow.activating(WindowID.settings)
                     }
                     Button("Done") { dismissWindow(id: WindowID.setup) }
@@ -119,14 +133,83 @@ struct SetupWindow: View {
         .padding(.bottom, 12)
     }
 
-    private func item(_ title: String, _ text: String, symbol: String) -> some View {
+    /// One of the first run's installs, which become the default PHP and Node.js.
+    private struct Runtime {
+        let name: String
+        /// The Settings pane that installs it again.
+        let pane: String
+        let install: Status.DefaultInstall
+
+        /// "PHP 8.5", or "PHP" while the version isn't known yet.
+        var label: String { install.version.isEmpty ? name : "\(name) \(install.version)" }
+    }
+
+    /// The first run's installs of the newest PHP and Node.js LTS (Status.defaults): in progress,
+    /// waiting for a download, failed, or done. Shown only when this setup installs them; once the
+    /// status stops listing them, both are done.
+    @ViewBuilder
+    private var runtimes: some View {
+        if let defaults = model.status?.defaults ?? seenDefaults.map(Self.finished) {
+            let all = [Runtime(name: "PHP", pane: "PHP", install: defaults.php), Runtime(name: "Node.js", pane: "Node", install: defaults.node)]
+            let pending = all.filter { $0.install.isPending }
+            ForEach(all.filter { $0.install.state == .failed }, id: \.name) { runtime in
+                item("\(runtime.label) couldn't be installed",
+                     (runtime.install.error.isEmpty ? "" : "\(runtime.install.error). ") + "Try again in Settings → \(runtime.pane).",
+                     symbol: "exclamationmark.triangle.fill", color: .orange)
+            }
+            if pending.contains(where: { $0.install.state == .installing }) {
+                row("Installing \(Self.names(pending))…", "Flock makes \(pending.count > 1 ? "them" : "it") the default for your sites and terminal.") {
+                    ProgressView().controlSize(.small)
+                }
+            } else if !pending.isEmpty {
+                row("Waiting to install \(Self.names(pending))", "\(Self.names(pending)) \(pending.count > 1 ? "are" : "is") installed as soon as Flock can download \(pending.count > 1 ? "them" : "it").") {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            if all.allSatisfy({ $0.install.state == .done }) {
+                item("\(Self.names(all)) are installed", "They're the defaults for your sites and terminal.", symbol: "checkmark.circle.fill", color: .green)
+            }
+        }
+    }
+
+    /// The installs as last seen, once the status no longer lists them: both defaults are set.
+    private static func finished(_ seen: Status.Defaults) -> Status.Defaults {
+        Status.Defaults(php: Status.DefaultInstall(version: seen.php.version), node: Status.DefaultInstall(version: seen.node.version))
+    }
+
+    /// The pane "Open Settings" shows: the one a link waited for during the setup, else the pane to
+    /// retry a failed default in, else the one Settings showed last.
+    private func showSettingsPane() {
+        if let link = model.pendingInstall {
+            model.handle(.install(link))
+        } else if model.pendingSecure != nil {
+            model.showSettings(.sites)
+        } else if let defaults = model.status?.defaults, defaults.php.state == .failed {
+            model.showSettings(.php)
+        } else if model.status?.defaults?.node.state == .failed {
+            model.showSettings(.node)
+        }
+    }
+
+    /// "PHP 8.5 and Node.js 24".
+    private static func names(_ runtimes: [Runtime]) -> String {
+        runtimes.map(\.label).joined(separator: " and ")
+    }
+
+    private func item(_ title: String, _ text: String, symbol: String, color: Color = .accentColor) -> some View {
+        row(title, text) {
+            Image(systemName: symbol).foregroundStyle(color)
+        }
+    }
+
+    private func row(_ title: String, _ text: String, @ViewBuilder icon: () -> some View) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                 Text(text).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         } icon: {
-            Image(systemName: symbol).foregroundStyle(Color.accentColor).frame(width: 22)
+            icon().frame(width: 22)
         }
         .padding(.vertical, 2)
     }

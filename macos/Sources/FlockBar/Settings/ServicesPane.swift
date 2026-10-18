@@ -135,9 +135,11 @@ struct ServicesPane: View {
     }
 
     /// What a pending flock://install link asks for, once the services and versions are loaded.
+    /// The PHP and Node panes answer links for PHP and Node.js.
     private var linkRequest: InstallLink.Resolution? {
         let store = model.settings
-        return model.pendingInstall?.resolve(services: store.services, catalog: store.catalog, postgres: store.postgres)
+        guard let link = model.pendingInstall, link.service != "php", link.service != "node" else { return nil }
+        return link.resolve(services: store.services, catalog: store.catalog, postgres: store.postgres)
     }
 
     private func install(_ install: InstallLink.Install) {

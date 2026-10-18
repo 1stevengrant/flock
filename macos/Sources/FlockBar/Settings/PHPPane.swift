@@ -67,6 +67,21 @@ struct PHPPane: View {
         .sheet(item: Binding(get: { logMinor.map(LogTarget.init) }, set: { logMinor = $0?.minor })) { target in
             PHPInstallLogSheet(minor: target.minor)
         }
+        // A flock://install/php link (AppModel.handle): nothing installs until the user confirms here.
+        .alert(linkRequest?.title ?? "", isPresented: Binding(get: { linkRequest != nil }, set: { if !$0 { model.pendingInstall = nil } }),
+               presenting: linkRequest) { request in
+            if let install = request.confirmation {
+                Button("Install") {
+                    let minor = install.line
+                    Task { await store.performOnPHP { try await $0.installPHP(minor) } }
+                }
+                Button("Cancel", role: .cancel) {}
+            } else {
+                Button("OK") {}
+            }
+        } message: { request in
+            Text(request.message)
+        }
         .task {
             // Poll quickly while something downloads, slowly otherwise.
             while !Task.isCancelled {
@@ -76,6 +91,12 @@ struct PHPPane: View {
                 try? await Task.sleep(for: .seconds(active ? 2 : 30))
             }
         }
+    }
+
+    /// What a pending flock://install link for PHP asks for, once the versions are loaded.
+    private var linkRequest: InstallLink.Resolution? {
+        guard let link = model.pendingInstall, link.service == "php" else { return nil }
+        return link.resolve(php: model.settings.php)
     }
 
     private func ini(for release: PHPRelease) -> String? {

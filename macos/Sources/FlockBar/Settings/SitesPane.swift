@@ -322,7 +322,9 @@ struct SitesPane: View {
     /// project; then the installed versions, which isolate the site. The tag "" means "follow".
     private func versionPicker(label: String, current: String, source: Status.VersionSource, pinned: String, file: String,
                                defaultVersion: String, installed: [String], change: @escaping (String) -> Void) -> some View {
-        let follow = pinned.isEmpty ? "Default (\(label) \(defaultVersion))" : "Use \(fileName(file)) (\(label) \(pinned))"
+        // On the first run there's no default until Flock has installed one.
+        let follow = !pinned.isEmpty ? "Use \(fileName(file)) (\(label) \(pinned))"
+            : defaultVersion.isEmpty ? "Default" : "Default (\(label) \(defaultVersion))"
         let versions = source == .isolated && !current.isEmpty && !installed.contains(current) ? installed + [current] : installed
         let help: String = switch source {
         case .isolated: "\(label) \(current) is set for this site on this machine (isolated)."

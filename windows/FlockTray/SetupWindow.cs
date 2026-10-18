@@ -14,16 +14,25 @@ internal sealed class SetupWindow : FlockWindow
 
     private readonly AppModel model;
     private readonly TextBlock log = Ui.MonoText("", 12);
+    // The first run's install of the default PHP and Node.js, updated in place as the status changes.
+    private readonly StackPanel defaults = new() { Spacing = 4, Margin = new Thickness(0, 0, 0, 24) };
     private string output = "";
+    private Stage stage;
+    // The versions the first run installs, as last seen: the status leaves them out once both are set.
+    private string defaultPhp = "", defaultNode = "";
+    private bool sawDefaults;
 
     public SetupWindow(AppModel model) : base("Set up Flock", 620, 600, minWidth: 480, minHeight: 480)
     {
         this.model = model;
+        model.Changed += ShowDefaults;
+        Closed += (_, _) => model.Changed -= ShowDefaults;
         Render(Stage.Intro);
     }
 
     private void Render(Stage stage)
     {
+        this.stage = stage;
         var page = new StackPanel { Padding = new Thickness(32, 8, 32, 24), Spacing = 0 };
         switch (stage)
         {
@@ -46,15 +55,30 @@ internal sealed class SetupWindow : FlockWindow
 
             case Stage.Done:
                 page.Children.Add(Header("Flock is ready", null));
+                if (defaults.Parent is Panel shown)
+                {
+                    shown.Children.Remove(defaults);
+                }
+                page.Children.Add(defaults);
+                ShowDefaults();
                 page.Children.Add(Ui.Section("Next steps",
                     Ui.Setting("Open a new terminal", "Terminals that were already open still have the old PATH.", null, Ui.GlyphTerminal),
                     Ui.Setting("Link a project", "In a Laravel project, run `flock link`: the site is then at http://<folder>.test. `flock secure` adds HTTPS.", null, Ui.GlyphGlobe),
-                    Ui.Setting("Install PHP", "Settings → PHP installs versions; running `php` in a terminal offers to install a missing one.", null, Ui.GlyphCode)));
+                    Ui.Setting("PHP and Node.js", "Flock installs the newest PHP and Node.js LTS as the defaults. Settings → PHP and Node install other versions.", null, Ui.GlyphCode)));
                 page.Children.Add(Buttons(
                     Ui.Button("Open Settings", () =>
                     {
                         Close();
-                        App.Current.Open(WindowKind.Settings);
+                        // A link that waited for the setup, or the pane to try a failed default again.
+                        var firstRun = model.Status?.Defaults;
+                        if (model.PendingInstall is { } link)
+                        {
+                            App.Current.ShowInstall(link);
+                        }
+                        else
+                        {
+                            App.Current.Open(WindowKind.Settings, firstRun?.Php.IsFailed == true ? SettingsPane.Php : firstRun?.Node.IsFailed == true ? SettingsPane.Node : null);
+                        }
                     }),
                     Ui.Button("Done", Close, accent: true)));
                 break;
@@ -89,6 +113,70 @@ internal sealed class SetupWindow : FlockWindow
 
         Render(result.Ok ? Stage.Done : Stage.Failed);
         await model.RefreshAsync();
+    }
+
+    /// <summary>
+    /// Shows how far the first run's install of the default PHP and Node.js is (Status.Defaults),
+    /// once the setup is done.
+    /// </summary>
+    private void ShowDefaults()
+    {
+        // While the daemon doesn't answer, keep what was shown.
+        if (stage != Stage.Done || model.Status is not { } status)
+        {
+            return;
+        }
+        defaults.Children.Clear();
+        if (status.Defaults is { } state)
+        {
+            sawDefaults = true;
+            defaultPhp = state.Php.Version.Length > 0 ? state.Php.Version : defaultPhp;
+            defaultNode = state.Node.Version.Length > 0 ? state.Node.Version : defaultNode;
+            var php = Named("PHP", defaultPhp);
+            var node = Named("Node.js", defaultNode);
+
+            var pending = new[] { (Name: php, Install: state.Php), (Name: node, Install: state.Node) }.Where(d => d.Install.IsPending).ToList();
+            if (pending.Count > 0)
+            {
+                var names = string.Join(" and ", pending.Select(d => d.Name));
+                var waiting = pending.All(d => !d.Install.IsInstalling);
+                var detail = waiting
+                    ? $"{names} {(pending.Count > 1 ? "are" : "is")} installed as soon as Flock can download {(pending.Count > 1 ? "them" : "it")}."
+                    : $"Your sites and terminals use {(pending.Count > 1 ? "them as the defaults" : "it as the default")}.";
+                defaults.Children.Add(Ui.Card(Ui.Column(8,
+                    Ui.Text($"Installing {names}…"),
+                    new ProgressBar { IsIndeterminate = true },
+                    Ui.Caption(detail))));
+            }
+            foreach (var (name, install, pane) in new[] { (php, state.Php, "PHP"), (node, state.Node, "Node") })
+            {
+                if (install.IsFailed)
+                {
+                    var reason = install.Error.Length > 0 ? $": {install.Error.TrimEnd('.')}" : "";
+                    var icon = Ui.Icon(Ui.GlyphWarning, 14, Ui.Critical);
+                    icon.VerticalAlignment = VerticalAlignment.Top;
+                    icon.Margin = new Thickness(0, 2, 0, 0);
+                    var text = Ui.Caption($"{name} couldn't be installed{reason}. Try again in Settings → {pane}.");
+                    text.IsTextSelectionEnabled = true;
+                    var row = new Grid { ColumnSpacing = 10 };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    Grid.SetColumn(text, 1);
+                    row.Children.Add(icon);
+                    row.Children.Add(text);
+                    defaults.Children.Add(Ui.Card(row));
+                }
+            }
+        }
+        // Both are installed. Not said after a setup that found the defaults set already.
+        if (defaults.Children.Count == 0 && sawDefaults)
+        {
+            defaults.Children.Add(Ui.Card(Ui.Row(10, Ui.Icon(Ui.GlyphCheck, 14, Ui.Success),
+                Ui.Text($"{Named("PHP", defaultPhp)} and {Named("Node.js", defaultNode)} are installed"))));
+        }
+        defaults.Visibility = defaults.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        static string Named(string product, string version) => version.Length > 0 ? $"{product} {version}" : product;
     }
 
     private static StackPanel Header(string title, string? text)

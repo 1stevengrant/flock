@@ -436,7 +436,10 @@ internal sealed class SitesPane(SettingsWindow window, AppModel model) : Pane(wi
     private ComboBox Picker(string label, string current, string source, string pinned, string file, string defaultVersion,
         List<string> installed, Func<string, SiteChange> change, string siteName)
     {
-        var follow = pinned.Length > 0 ? $"Use {System.IO.Path.GetFileName(file)} ({label} {pinned})" : $"Default ({label} {defaultVersion})";
+        // No default yet while the first run installs it.
+        var follow = pinned.Length > 0 ? $"Use {System.IO.Path.GetFileName(file)} ({label} {pinned})"
+            : defaultVersion.Length > 0 ? $"Default ({label} {defaultVersion})"
+            : "Default";
         var versions = installed.ToList();
         if (source == Status.VersionSource.Isolated && current.Length > 0 && !versions.Contains(current))
         {

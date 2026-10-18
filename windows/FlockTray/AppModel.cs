@@ -48,7 +48,7 @@ public sealed class AppModel
     /// <summary>Flock isn't set up for this user yet, and this app can do it (see Installation).</summary>
     public bool NeedsSetup { get; set; }
 
-    /// <summary>A flock://install link waiting for the user to confirm it in Settings → Services.</summary>
+    /// <summary>A flock://install link waiting for the user to confirm it in Settings → Services (or PHP, Node).</summary>
     public InstallLink? PendingInstall { get; set; }
 
     /// <summary>A flock://secure link waiting for the user to confirm it in Settings → Sites.</summary>

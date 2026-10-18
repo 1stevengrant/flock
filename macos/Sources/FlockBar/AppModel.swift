@@ -36,20 +36,24 @@ final class AppModel {
         }
     }
 
-    /// A flock://install link waiting for the user to confirm it in Settings → Services.
+    /// A flock://install link waiting for the user to confirm it in Settings → Services (or PHP, Node).
     var pendingInstall: InstallLink?
 
     /// A flock://secure link waiting for the user to confirm it in Settings → Sites.
     var pendingSecure: SecureLink?
 
-    /// Shows the service a link asks to install, or the sites for a link that asks to secure one;
-    /// the pane then asks to confirm. Before the setup there are no sites to secure. An update link
-    /// (`flock update`) checks for a new version of the app.
+    /// Shows the service a link asks to install (PHP and Node.js have their own panes), or the sites
+    /// for a link that asks to secure one; the pane then asks to confirm. Before the setup there are
+    /// no sites to secure. An update link (`flock update`) checks for a new version of the app.
     func handle(_ link: FlockLink) {
         switch link {
         case .install(let link):
             pendingInstall = link
-            showSettings(.services, service: link.service)
+            switch link.service {
+            case "php": showSettings(.php)
+            case "node": showSettings(.node)
+            default: showSettings(.services, service: link.service)
+            }
         case .secure(let link):
             guard !needsSetup else { return }
             pendingSecure = link
