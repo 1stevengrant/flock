@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"flock/internal/binaries"
+	"flock/internal/capture"
 	"flock/internal/config"
 	"flock/internal/frankenphp"
 	"flock/internal/node"
@@ -50,6 +51,8 @@ type ConfigView struct {
 	Xdebug            bool         `json:"xdebug"`
 	XdebugBreakpoints bool         `json:"xdebug_breakpoints"`
 	Dumps             bool         `json:"dumps"`
+	CaptureOff        []string     `json:"capture_off"`
+	DumpsInPage       bool         `json:"dumps_in_page"`
 	Channel           string       `json:"channel"` // "stable", "beta" or "experimental"
 	Root              string       `json:"root"`
 	Ports             config.Ports `json:"ports"`
@@ -129,6 +132,20 @@ func applySettings(root string, cfg *config.Config, s Settings) error {
 	}
 	if s.Dumps != nil {
 		cfg.Dumps = *s.Dumps
+	}
+	if s.CaptureOff != nil {
+		if err := capture.Valid(*s.CaptureOff); err != nil {
+			return invalid("%v", err)
+		}
+		cfg.CaptureOff = nil
+		for _, k := range capture.Kinds { // known kinds once each, in a stable order
+			if slices.Contains(*s.CaptureOff, k) {
+				cfg.CaptureOff = append(cfg.CaptureOff, k)
+			}
+		}
+	}
+	if s.DumpsInPage != nil {
+		cfg.DumpsInPage = *s.DumpsInPage
 	}
 	if s.DefaultPHP != nil {
 		installed, _ := php.Installed(root)
@@ -538,6 +555,7 @@ func configView(root string, cfg *config.Config) ConfigView {
 	view := ConfigView{
 		TLD: cfg.TLD, DefaultPHP: cfg.DefaultPHP, DefaultNode: cfg.DefaultNode,
 		Xdebug: cfg.Xdebug, XdebugBreakpoints: cfg.XdebugBreakpoints, Dumps: cfg.Dumps, Channel: ChannelOf(cfg), Root: root, Ports: cfg.Ports,
+		CaptureOff: append([]string{}, cfg.CaptureOff...), DumpsInPage: cfg.DumpsInPage,
 		Parked: cfg.Parked, PHP: []PHPVersion{}, Node: []string{},
 	}
 	if view.Parked == nil {

@@ -7,7 +7,8 @@
 #      beta of the same major version already released).
 #   2. build.yml builds and signs it, like a stable release.
 #   3. It is tagged (v1.1.0-beta.1) and published as a GitHub pre-release with its notes, and added
-#      to the update feed: apps with "Beta versions" on offer it, others don't.
+#      to the update feed: apps with "Beta versions" on offer it, and so do betas until the release
+#      they lead to; others don't.
 #
 # A beta that works is released as stable with promote.yml.
 name: Beta release

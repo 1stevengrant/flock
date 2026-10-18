@@ -24,9 +24,9 @@ final class AppModel {
     private(set) var isUpdating = false
 
     /// The pane the Settings window shows; the panel opens Settings at a pane.
-    var settingsPane: SettingsPane = Snapshot.pane.flatMap(SettingsPane.init(rawValue:)) ?? .general
+    var settingsPane: SettingsPane = .general
     /// The service selected in Settings → Services.
-    var servicesSelection: String? = Snapshot.service
+    var servicesSelection: String?
 
     /// Points the Settings window at a pane (and a service of the Services pane).
     func showSettings(_ pane: SettingsPane, service: String? = nil) {
@@ -83,13 +83,10 @@ final class AppModel {
         startPolling()
         settings.onChange = { [weak self] in await self?.refresh() }
 
-        // Snapshots (a development aid) must never change the installation.
-        if Snapshot.target == nil, !needsSetup, installation.needsUpdate(recorded: UserDefaults.standard.string(forKey: Self.installedFlockKey)) {
+        if !needsSetup, installation.needsUpdate(recorded: UserDefaults.standard.string(forKey: Self.installedFlockKey)) {
             Task { await updateInstallation() }
         }
-        if Snapshot.target == nil {
-            updater.start()
-        }
+        updater.start()
     }
 
     var isRunning: Bool { status != nil }
@@ -145,7 +142,7 @@ final class AppModel {
         if previous?.mailCount != new.mailCount {
             Task { await mail.refreshIfVisible() }
         }
-        if previous?.dumpCount != new.dumpCount {
+        if previous?.dumpCount != new.dumpCount || previous?.eventCount != new.eventCount {
             Task { await dumps.refreshIfVisible() }
         }
         // PostgreSQL, Valkey or a catalog service changed (maybe from the CLI): the Services
@@ -172,6 +169,18 @@ final class AppModel {
 
     func setDumps(_ on: Bool, from target: ErrorTarget = .panel) async {
         await update(target) { try await $0.updateSettings(dumps: on) }
+    }
+
+    /// Captures events of `kind` or stops capturing them; the other kinds stay as they are.
+    func setCapture(_ kind: Event.Kind, _ on: Bool, from target: ErrorTarget = .dumps) async {
+        var off = Set(status?.captureOff ?? [])
+        if on { off.remove(kind.rawValue) } else { off.insert(kind.rawValue) }
+        let list = Event.Kind.allCases.map(\.rawValue).filter(off.contains) + off.subtracting(Event.Kind.allCases.map(\.rawValue)).sorted()
+        await update(target) { try await $0.updateSettings(SettingsChange(captureOff: list)) }
+    }
+
+    func setDumpsInPage(_ on: Bool, from target: ErrorTarget = .dumps) async {
+        await update(target) { try await $0.updateSettings(SettingsChange(dumpsInPage: on)) }
     }
 
     private func update(_ target: ErrorTarget, _ change: @Sendable (FlockClient) async throws -> Status) async {

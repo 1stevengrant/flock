@@ -40,7 +40,6 @@ final class SettingsStore {
     }
 
     func refresh() async {
-        if Snapshot.isFixture { return }
         do {
             let (config, services) = try await (client.config(), client.services())
             if config != self.config {
@@ -77,7 +76,6 @@ final class SettingsStore {
 
     /// Reloads the AI clients (only the AI pane lists them).
     func refreshMCP() async {
-        if Snapshot.isFixture { return }
         do {
             let fresh = try await client.mcp()
             if fresh != mcp {
@@ -142,7 +140,6 @@ final class SettingsStore {
 
     /// Reloads the FrankenPHP builds (only the PHP pane lists them).
     func refreshFrankenPHP() async {
-        if Snapshot.isFixture { return }
         do {
             let fresh = try await client.frankenPHP()
             if fresh != frankenPHP {
@@ -198,7 +195,6 @@ final class SettingsStore {
 
     /// Reloads PostgreSQL versions and the catalog; the Services pane needs them.
     func refreshInstalls() async {
-        if Snapshot.isFixture { return }
         do {
             async let postgres = client.postgresVersions()
             async let catalog = client.serviceCatalog()
@@ -245,7 +241,6 @@ final class SettingsStore {
 
     /// "Check for Updates": fetches the package manifest, for PostgreSQL and the catalog at once.
     func checkForUpdates() async {
-        if Snapshot.isFixture { return }
         do {
             async let postgres = client.checkPostgres()
             async let catalog = client.checkServiceCatalog()
@@ -273,8 +268,7 @@ final class SettingsStore {
     }
 
     func catalogLog(_ id: String) async -> String {
-        if Snapshot.isFixture { return SnapshotFixtures.log }
-        return (try? await client.catalogLog(id)) ?? ""
+        (try? await client.catalogLog(id)) ?? ""
     }
 
     private func adopt(_ fresh: PostgresVersions) {
@@ -287,13 +281,6 @@ final class SettingsStore {
         if fresh != catalog {
             catalog = fresh
         }
-    }
-
-    /// Fills the store with fixture data for `--snapshot` renders of the Services pane.
-    func loadFixture(services: [Service], postgres: PostgresVersions?, catalog: ServiceCatalog? = nil) {
-        self.services = services
-        self.postgres = postgres
-        self.catalog = catalog
     }
 
     func phpInstallLog(_ minor: String) async -> String {

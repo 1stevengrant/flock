@@ -9,6 +9,7 @@ windows/
   FlockKit/         models + API client (net10.0, no UI — the macOS app's FlockKit)
   FlockKit.Tests/   xUnit tests, run anywhere: dotnet test windows/FlockKit.Tests
   FlockTray/        the WinUI 3 app (unpackaged, self-contained Windows App SDK)
+  FlockScreenshots/ the app's windows with demo data, as PNGs for the docs (never shipped)
   installer/        the Inno Setup script for Flock-Setup-x64.exe
   build.ps1         tests + publishes FlockTray to windows\dist\FlockTray-x64\
   build-installer.ps1  the CLI, the hosts helper, build.ps1 and the installer around them
@@ -113,3 +114,25 @@ fails, or a service hasn't exited after 10 seconds, it is killed. php-cgi worker
 
 Logs: `%AppData%\Flock\log\` (daemon.log, web.log, php8.x-cgi.log, php8.x-install.log) and
 `%LocalAppData%\Flock\tray.log` for unexpected errors in the tray app.
+
+## Screenshots for the docs
+
+`FlockScreenshots` renders the tray app's windows with demo data, for the website's docs: every
+shot in `FlockScreenshots/Screenshots.cs`, in the light and the dark theme, as
+`{shot}-windows-{light|dark}.png` (the shot ids are the website's `screenshot:…` placeholders).
+
+```powershell
+dotnet build windows/FlockScreenshots -c Release -p:Platform=x64
+windows\FlockScreenshots\bin\x64\Release\net10.0-windows10.0.22621.0\win-x64\FlockScreenshots.exe --out screenshots
+# or a few: --only settings-php,mail-window   one theme: --theme dark
+```
+
+It needs no daemon and changes nothing on the machine: a fake daemon answers from
+`tools/screenshots/fixtures` (Flock's data folder points at a scratch folder through `FLOCK_HOME`).
+The windows open on screen, on top of everything, for a few seconds each; the PNGs are what the
+screen shows, at the display's scale. `tools/screenshots/make-dumps.php` regenerates the Dumps
+fixtures with the dump server's VarDumper. The **Screenshots** workflow does the same in CI.
+
+The project compiles FlockTray's sources with `SCREENSHOTS` defined, plus its own `Program`. The
+few hooks in FlockTray are inside `#if SCREENSHOTS`, so the app that ships has none of it;
+`build.ps1` checks that before the installer is made.

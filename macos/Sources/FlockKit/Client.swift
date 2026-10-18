@@ -421,6 +421,23 @@ public actor FlockClient {
         _ = try await send("DELETE", "/v1/dumps")
     }
 
+    /// Queries, logs, views, jobs and requests captured by the PHP agent, newest first. Kinds this
+    /// app doesn't know are left out; a daemon without the endpoint (older Flock) has none.
+    public func events() async throws -> [Event] {
+        do {
+            let data = try await send("GET", "/v1/events")
+            return (try FlockJSON.eventDecoder().decode([Event]?.self, from: data) ?? []).filter { $0.kind != nil }
+        } catch FlockError.server(404, _) {
+            return []
+        }
+    }
+
+    public func clearEvents() async throws {
+        do {
+            _ = try await send("DELETE", "/v1/events")
+        } catch FlockError.server(404, _) {}
+    }
+
     public func logs() async throws -> LogIndex {
         try await decode(LogIndex.self, "GET", "/v1/logs")
     }

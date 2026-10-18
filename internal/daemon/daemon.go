@@ -19,6 +19,7 @@ import (
 
 	"flock/internal/api"
 	"flock/internal/binaries"
+	"flock/internal/capture"
 	"flock/internal/catalog"
 	"flock/internal/certs"
 	"flock/internal/config"
@@ -63,8 +64,10 @@ type daemon struct {
 	dns      *dns.Server // written under reloadMu and mu
 	dnsErr   error       // why the DNS server isn't running (Windows, where it is optional)
 	mail     *mail.Server
-	webUp    bool
-	php      *php.Manager
+	// collector receives the PHP agent's dumps and events while capture is on.
+	collector *capture.Collector
+	webUp     bool
+	php       *php.Manager
 	// binaries is the manifest of prebuilt packages for the configured channel, shared by the managers.
 	binaries *binaries.Catalog
 	// frankenphp installs FrankenPHP builds; restarts counts RestartSite calls per site (see frankenphp.Site.Restart).
@@ -104,6 +107,9 @@ func (d *daemon) shutdown() {
 	}
 	if d.mail != nil {
 		_ = d.mail.Shutdown()
+	}
+	if d.collector != nil {
+		_ = d.collector.Close()
 	}
 	d.procs.StopAll()
 }
@@ -209,6 +215,24 @@ func (d *daemon) ensureMail(cfg *config.Config) error {
 		return fmt.Errorf("mail: %s", busy(cfg.Ports.SMTP, err))
 	}
 	d.mail = srv
+	return nil
+}
+
+// ensureCollector runs the agent's collector while capture is on, on the configured port.
+func (d *daemon) ensureCollector(cfg *config.Config) error {
+	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Ports.Agent)
+	if d.collector != nil && (!cfg.Dumps || d.collector.Addr() != addr) {
+		_ = d.collector.Close()
+		d.collector = nil
+	}
+	if !cfg.Dumps || d.collector != nil {
+		return nil
+	}
+	c, err := capture.Listen(d.root, addr)
+	if err != nil {
+		return fmt.Errorf("capture: %s", busy(cfg.Ports.Agent, err))
+	}
+	d.collector = c
 	return nil
 }
 
@@ -450,7 +474,7 @@ func (d *daemon) reload() error {
 	}
 
 	var warnings []string
-	for _, ensure := range []func(*config.Config) error{d.ensureDNS, d.ensureMail} {
+	for _, ensure := range []func(*config.Config) error{d.ensureDNS, d.ensureMail, d.ensureCollector} {
 		if err := ensure(cfg); err != nil {
 			warnings = append(warnings, err.Error())
 		}
@@ -486,9 +510,15 @@ func (d *daemon) reload() error {
 
 	installed, _ := php.Installed(d.root)
 
+	// With capture on, versions with the agent load it (Sync writes their ini); the others send
+	// dumps to the dump server, which the agent unsets the dump server's variables for.
+	agent := capture.Settings{On: cfg.Dumps, Addr: fmt.Sprintf("127.0.0.1:%d", cfg.Ports.Agent), Off: cfg.CaptureOff, DumpsInPage: cfg.DumpsInPage}
+	if _, err := capture.Sync(d.root, agent); err != nil {
+		warnings = append(warnings, "capture: "+err.Error())
+	}
 	var extraEnv []string
 	if cfg.Dumps {
-		extraEnv = dumps.Env(cfg.Ports.Dumps)
+		extraEnv = append(dumps.Env(cfg.Ports.Dumps), agent.Env(d.root)...)
 	}
 	// pool starts a version's FastCGI pool the first time a site needs it.
 	pool := func(version string) ([]string, error) {
@@ -761,6 +791,8 @@ func serviceName(id string) string {
 		return "the mail catcher"
 	case "dumps":
 		return "the dump server"
+	case "agent":
+		return "the capture collector"
 	case "postgres":
 		return "PostgreSQL"
 	}
@@ -824,6 +856,15 @@ func (d *daemon) Status() api.Status {
 		st.MailCount = len(messages)
 	}
 	st.DumpCount = dumps.Count(d.root)
+	st.EventCount = capture.Count(d.root)
+	st.CaptureUnsupported = []string{}
+	if installed, err := php.Installed(d.root); err == nil {
+		for _, minor := range installed {
+			if !capture.Supported(d.root, minor) {
+				st.CaptureUnsupported = append(st.CaptureUnsupported, minor)
+			}
+		}
+	}
 	st.DNS = api.DNSStatus{Wildcard: d.wildcard.ok, WildcardProblem: d.wildcard.problem, MaxDepth: config.MaxDepth}
 	if d.cfg != nil {
 		st.DNS.TLD = d.cfg.TLD
@@ -849,7 +890,8 @@ func (d *daemon) Status() api.Status {
 		}
 		st.Xdebug, st.XdebugBreakpoints = d.cfg.Xdebug, d.cfg.XdebugBreakpoints
 		st.Channel = api.ChannelOf(d.cfg)
-		st.Dumps = d.cfg.Dumps
+		st.Dumps, st.DumpsInPage = d.cfg.Dumps, d.cfg.DumpsInPage
+		st.CaptureOff = append([]string{}, d.cfg.CaptureOff...)
 		st.Defaults = d.defaultsStatus(d.cfg)
 
 		// Without the helper, sites resolve only through the DNS rule: say so when that fails too.

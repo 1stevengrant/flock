@@ -42,11 +42,6 @@ struct PostgresDetail: View {
             }
             .padding(16)
         }
-        .task {
-            if Snapshot.sheet == "uninstall" {
-                uninstallState.wrappedValue = model.settings.postgres?.activeMajor
-            }
-        }
         .alert(item: switchState.projectedValue) { target in
             switchAlert(target)
         }

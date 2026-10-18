@@ -10,6 +10,10 @@ public sealed class FlockConfig
     public string DefaultNode { get; init; } = "";
     public bool Xdebug { get; init; }
     public bool Dumps { get; init; }
+    /// <summary>Kinds (EventKind) not captured while capture is on.</summary>
+    public List<string> CaptureOff { get; init; } = [];
+    /// <summary>dump() output also shows in the page or terminal; dd() always does.</summary>
+    public bool DumpsInPage { get; init; }
     /// <summary>The channel of prebuilt packages: "stable", "beta" or "experimental" (`flock channel`).</summary>
     public string Channel { get; init; } = "stable";
     public string Root { get; init; } = "";
@@ -86,14 +90,19 @@ public sealed class Service
     public bool IsOnRequest => Id is not ("web" or "dns" or "hosts" or "mail" or "dumps" or "postgres");
 }
 
-/// <summary>Body of POST /v1/settings; null fields are left out and stay unchanged.</summary>
+/// <summary>
+/// Body of POST /v1/settings; null fields are left out and stay unchanged. CaptureOff replaces the
+/// list of kinds (EventKind) that aren't captured.
+/// </summary>
 public sealed record SettingsChange(
     bool? Xdebug = null,
     bool? XdebugBreakpoints = null,
     bool? Dumps = null,
     string? DefaultPhp = null,
     string? DefaultNode = null,
-    string? Channel = null);
+    string? Channel = null,
+    List<string>? CaptureOff = null,
+    bool? DumpsInPage = null);
 
 /// <summary>
 /// Body of PATCH /v1/sites/{name}; null fields are left out. An empty Php means "use the default";

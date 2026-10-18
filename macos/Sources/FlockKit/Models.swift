@@ -18,9 +18,19 @@ public struct Status: Decodable, Sendable, Equatable {
     public var xdebug: Bool
     /// Sites with PhpStorm breakpoints send every request to Xdebug.
     public var xdebugBreakpoints: Bool
+    /// Capture is on: dumps (and, where the PHP agent runs, queries, logs, views, jobs and
+    /// requests) go to Flock.
     public var dumps: Bool
+    /// Event kinds ("query", "log", "view", "job", "request") that are not captured.
+    public var captureOff: [String]
+    /// dump() output also shows in the page or terminal; dd() always does.
+    public var dumpsInPage: Bool
     public var mailCount: Int
     public var dumpCount: Int
+    /// Captured events (queries, logs, ...), see GET /v1/events.
+    public var eventCount: Int
+    /// Installed PHP versions whose build has no agent extension: they only capture dumps.
+    public var captureUnsupported: [String]
     public var sites: [Site]
     public var processes: [Process]
     public var warnings: [String]
@@ -360,7 +370,8 @@ public struct Status: Decodable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case version, pid, startedAt, dns, httpPort, httpsPort, mail, postgres, valkey, extras
-        case xdebug, xdebugBreakpoints, dumps, mailCount, dumpCount, sites, processes, warnings, channel, defaults
+        case xdebug, xdebugBreakpoints, dumps, captureOff, dumpsInPage, mailCount, dumpCount, eventCount, captureUnsupported
+        case sites, processes, warnings, channel, defaults
     }
 
     // Go omits empty slices (`omitempty`) or sends null; treat both as empty.
@@ -379,8 +390,12 @@ public struct Status: Decodable, Sendable, Equatable {
         xdebug = try c.decodeIfPresent(Bool.self, forKey: .xdebug) ?? false
         xdebugBreakpoints = try c.decodeIfPresent(Bool.self, forKey: .xdebugBreakpoints) ?? false
         dumps = try c.decodeIfPresent(Bool.self, forKey: .dumps) ?? false
+        captureOff = try c.decodeIfPresent([String].self, forKey: .captureOff) ?? []
+        dumpsInPage = try c.decodeIfPresent(Bool.self, forKey: .dumpsInPage) ?? false
         mailCount = try c.decodeIfPresent(Int.self, forKey: .mailCount) ?? 0
         dumpCount = try c.decodeIfPresent(Int.self, forKey: .dumpCount) ?? 0
+        eventCount = try c.decodeIfPresent(Int.self, forKey: .eventCount) ?? 0
+        captureUnsupported = try c.decodeIfPresent([String].self, forKey: .captureUnsupported) ?? []
         sites = try c.decodeIfPresent([Site].self, forKey: .sites) ?? []
         processes = try c.decodeIfPresent([Process].self, forKey: .processes) ?? []
         warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
@@ -481,6 +496,12 @@ public struct Dump: Decodable, Sendable, Equatable, Identifiable, Hashable {
         public var line: Int
         public var name: String
 
+        public init(file: String, line: Int, name: String = "") {
+            self.file = file
+            self.line = line
+            self.name = name
+        }
+
         enum CodingKeys: String, CodingKey { case file, line, name }
 
         public init(from decoder: Decoder) throws {
@@ -517,6 +538,101 @@ public struct Dump: Decodable, Sendable, Equatable, Identifiable, Hashable {
         label = try c.decodeIfPresent(String.self, forKey: .label)
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         html = try c.decodeIfPresent(String.self, forKey: .html) ?? ""
+    }
+}
+
+/// An entry of GET /v1/events: a query, log message, rendered view, queue job or finished request
+/// that Flock's PHP agent captured. Decode it with `FlockJSON.eventDecoder()`, which keeps the
+/// keys of a log message's context as the app wrote them.
+public struct Event: Decodable, Sendable, Equatable, Identifiable, Hashable {
+    public enum Kind: String, Sendable, CaseIterable, Identifiable {
+        case query, log, view, job, request
+
+        public var id: String { rawValue }
+
+        /// "Queries", "Logs", ... for menus and settings.
+        public var title: String {
+            switch self {
+            case .query: "Queries"
+            case .log: "Logs"
+            case .view: "Views"
+            case .job: "Jobs"
+            case .request: "Requests"
+            }
+        }
+    }
+
+    public var id: String
+    /// nil for a kind this version of the app doesn't know; such events are left out.
+    public var kind: Kind?
+    public var time: Date
+    public var site: String
+    /// Shared with the dumps and other events of the same HTTP request or CLI run.
+    public var group: String
+    public var request: Dump.Request?
+    public var commandLine: String?
+    /// The first frame outside vendor/ (where a query was run, a job dispatched, ...).
+    public var source: Dump.Source?
+
+    // query
+    public var sql: String
+    public var bindings: [JSONValue]
+    public var connection: String
+    /// Queries, finished jobs and requests.
+    public var durationMs: Double?
+
+    // log
+    public var level: String
+    public var message: String
+    public var context: [String: JSONValue]
+
+    // view
+    public var view: String
+    public var path: String
+
+    // job
+    public var job: String
+    public var queue: String
+    /// "processing", "processed" or "failed".
+    public var state: String
+    public var exception: String
+
+    // request
+    public var statusCode: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, time, site, group, request, source, sql, bindings, connection, level, message, context
+        case view, path, job, queue, state, exception
+        case commandLine = "command_line"
+        case durationMs = "duration_ms"
+        case statusCode = "status_code"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)).flatMap { $0.flatMap(Kind.init(rawValue:)) }
+        time = try c.decodeIfPresent(Date.self, forKey: .time) ?? .distantPast
+        site = try c.decodeIfPresent(String.self, forKey: .site) ?? ""
+        group = try c.decodeIfPresent(String.self, forKey: .group) ?? ""
+        request = try? c.decodeIfPresent(Dump.Request.self, forKey: .request)
+        commandLine = try? c.decodeIfPresent(String.self, forKey: .commandLine)
+        source = try? c.decodeIfPresent(Dump.Source.self, forKey: .source)
+        sql = (try? c.decodeIfPresent(String.self, forKey: .sql)) ?? ""
+        bindings = (try? c.decodeIfPresent([JSONValue].self, forKey: .bindings)) ?? []
+        connection = (try? c.decodeIfPresent(String.self, forKey: .connection)) ?? ""
+        durationMs = try? c.decodeIfPresent(Double.self, forKey: .durationMs)
+        level = (try? c.decodeIfPresent(String.self, forKey: .level)) ?? ""
+        message = (try? c.decodeIfPresent(String.self, forKey: .message)) ?? ""
+        // PHP encodes an empty array as [], so an empty context may come as a list.
+        context = (try? c.decodeIfPresent([String: JSONValue].self, forKey: .context)) ?? [:]
+        view = (try? c.decodeIfPresent(String.self, forKey: .view)) ?? ""
+        path = (try? c.decodeIfPresent(String.self, forKey: .path)) ?? ""
+        job = (try? c.decodeIfPresent(String.self, forKey: .job)) ?? ""
+        queue = (try? c.decodeIfPresent(String.self, forKey: .queue)) ?? ""
+        state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? ""
+        exception = (try? c.decodeIfPresent(String.self, forKey: .exception)) ?? ""
+        statusCode = try? c.decodeIfPresent(Int.self, forKey: .statusCode)
     }
 }
 

@@ -115,7 +115,7 @@ func (s *server) instructions(ctx context.Context) string {
 - Run php, composer, node and npm as usual: Flock's shims pick the versions the project uses.
 - When code uses a PHP extension (imagick, intl, ...), require it in composer.json ("composer require ext-<name>:*"). php_extensions shows what the project requires and what Flock's PHP has.
 - Mail the app sends is caught by Flock, not delivered: read it with list_mail and read_mail.
-- To debug: get_errors (the Laravel log and PHP errors), get_dumps (dump() and dd() output) and service_logs.
+- To debug: get_errors (the Laravel log and PHP errors), get_dumps (dump() and dd() output), get_events (the queries, logs, views, jobs and requests a page or command ran) and service_logs.
 - If other guidelines describe a different local development server, follow them only when Flock isn't the one serving the project.`)
 	return b.String()
 }

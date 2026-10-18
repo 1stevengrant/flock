@@ -86,7 +86,8 @@ func (s *server) addWriteTools(srv *mcp.Server) {
 		Name: "set_debugging",
 		Description: "Turn Xdebug or dump capture on or off. With xdebug on, requests that ask for it (the XDEBUG_SESSION " +
 			"cookie or parameter, or a browser extension) run with Xdebug. With dumps on, dump() and dd() output goes to Flock " +
-			"(read it with get_dumps) instead of into the page.",
+			"(read it with get_dumps) instead of into the page, and Flock records queries, logs, views, jobs and requests " +
+			"(read them with get_events).",
 		Annotations: additive(true),
 		InputSchema: schema[debuggingIn](map[string][]any{"feature": {"xdebug", "dumps"}}),
 	}, s.setDebugging)
@@ -626,7 +627,8 @@ func (s *server) setDebugging(ctx context.Context, _ *mcp.CallToolRequest, in de
 		settings.Dumps = &in.Enabled
 		msg = "Dump capture is off: dump() output shows in the page or console again."
 		if in.Enabled {
-			msg = "Dump capture is on: dump() and dd() output goes to Flock; read it with get_dumps."
+			msg = "Capture is on: dump() and dd() output goes to Flock (read it with get_dumps), and queries, logs, views, jobs " +
+				"and requests are recorded (read them with get_events)."
 		}
 	default:
 		return nil, actionOut{}, fmt.Errorf("unknown feature %q: use xdebug or dumps", in.Feature)

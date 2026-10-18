@@ -278,6 +278,25 @@ public sealed class FlockClient : IDisposable
 
     public async Task ClearDumpsAsync() => await Raw(HttpMethod.Delete, "/v1/dumps");
 
+    // Events: queries, logs, views, jobs and requests captured next to the dumps
+
+    /// <summary>Newest first; kinds (EventKind values) and limit narrow the list.</summary>
+    public Task<List<RuntimeEvent>> EventsAsync(IEnumerable<string>? kinds = null, int? limit = null)
+    {
+        var query = new List<string>();
+        if (kinds?.ToList() is { Count: > 0 } list)
+        {
+            query.Add("kind=" + Uri.EscapeDataString(string.Join(",", list)));
+        }
+        if (limit is { } n)
+        {
+            query.Add($"limit={n}");
+        }
+        return Get<List<RuntimeEvent>>("/v1/events" + (query.Count == 0 ? "" : "?" + string.Join("&", query)));
+    }
+
+    public async Task ClearEventsAsync() => await Raw(HttpMethod.Delete, "/v1/events");
+
     // Logs
 
     public Task<LogIndex> LogsAsync() => Get<LogIndex>("/v1/logs");
