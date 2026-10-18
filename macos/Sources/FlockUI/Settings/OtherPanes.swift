@@ -182,6 +182,9 @@ struct AboutPane: View {
                 Button("Flock Docs") { NSWorkspace.shared.open(URL(string: "https://flockphp.com/docs")!) }
                 Button("License") { NSWorkspace.shared.open(URL(string: "https://github.com/flock-php/flock/blob/main/LICENSE")!) }
             }
+            Button("Found a bug? Report an issue") { NSWorkspace.shared.open(issueURL) }
+                .buttonStyle(.link)
+                .font(.callout)
             Text("Copyright © Guava s.r.o. Licensed under the AGPL-3.0.")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
@@ -197,6 +200,14 @@ struct AboutPane: View {
         .sheet(isPresented: uninstallingState.projectedValue) {
             UninstallSheet()
         }
+    }
+
+    /// A blank GitHub issue with the versions filled in, so reports say what they run on.
+    private var issueURL: URL {
+        var components = URLComponents(string: "https://github.com/flock-php/flock/issues/new")!
+        let body = "\n\n---\nApp: \(Updater.appVersion)\nDaemon: \(model.status?.version ?? "not running")\nOS: macOS \(ProcessInfo.processInfo.operatingSystemVersionString)\n"
+        components.queryItems = [URLQueryItem(name: "body", value: body)]
+        return components.url!
     }
 }
 

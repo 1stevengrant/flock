@@ -138,10 +138,18 @@ internal sealed class AboutPane(SettingsWindow window, AppModel model) : Pane(wi
                 Ui.Setting("Daemon", null, Ui.Text(Model.Status?.Version ?? "not running", foreground: Ui.SecondaryText, wrap: false)),
                 Ui.Setting("Data folder", FlockPaths.Root, Ui.Button("Show in Explorer", () => Native.Reveal(FlockPaths.Root))),
                 Ui.Setting("Flock documentation", null, Ui.Button("Open", () => Native.Open("https://flockphp.com/docs"))),
+                Ui.Setting("Found a bug?", "Opens a new GitHub issue with your versions filled in.", Ui.Button("Report an issue", () => Native.Open(IssueUrl(version.Split('+')[0])))),
                 Ui.Setting("License", "Copyright © Guava s.r.o. Licensed under the AGPL-3.0.", Ui.Button("View", () => Native.Open("https://github.com/flock-php/flock/blob/main/LICENSE")))),
             Ui.Section("Uninstall",
                 Ui.Setting("Uninstall Flock", "Stops Flock and removes it from this PC. Your sites, databases and settings are kept.",
                     Ui.Button("Uninstall Flock…", () => _ = ConfirmUninstall()))));
+    }
+
+    // IssueUrl opens a blank GitHub issue with the versions filled in, so reports say what they run on.
+    private string IssueUrl(string appVersion)
+    {
+        var body = $"\n\n---\nApp: {appVersion}\nDaemon: {Model.Status?.Version ?? "not running"}\nOS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}\n";
+        return "https://github.com/flock-php/flock/issues/new?body=" + Uri.EscapeDataString(body);
     }
 
     private async Task ConfirmUninstall()
