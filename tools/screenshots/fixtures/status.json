@@ -84,39 +84,48 @@
   "processes": [
     {
       "name": "web",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "dns",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "mail",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "dump-server",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "postgres",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "valkey",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "mysql",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "php8.5-cgi-1",
-      "up": true
+      "up": true,
+      "restarts": 0
     },
     {
       "name": "php8.4-cgi-1",
-      "up": true
+      "up": true,
+      "restarts": 0
     }
   ],
   "warnings": []

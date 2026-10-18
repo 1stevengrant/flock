@@ -104,7 +104,6 @@ struct LogsWindow: View {
         .safeAreaInset(edge: .bottom) {
             ErrorBanner(message: store.error)
         }
-        .task { await Snapshot.captureIfRequested(WindowID.logs) }
         .task {
             await store.loadIndex()
         }

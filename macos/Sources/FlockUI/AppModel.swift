@@ -24,9 +24,9 @@ final class AppModel {
     private(set) var isUpdating = false
 
     /// The pane the Settings window shows; the panel opens Settings at a pane.
-    var settingsPane: SettingsPane = Snapshot.pane.flatMap(SettingsPane.init(rawValue:)) ?? .general
+    var settingsPane: SettingsPane = .general
     /// The service selected in Settings → Services.
-    var servicesSelection: String? = Snapshot.service
+    var servicesSelection: String?
 
     /// Points the Settings window at a pane (and a service of the Services pane).
     func showSettings(_ pane: SettingsPane, service: String? = nil) {
@@ -83,13 +83,10 @@ final class AppModel {
         startPolling()
         settings.onChange = { [weak self] in await self?.refresh() }
 
-        // Snapshots (a development aid) must never change the installation.
-        if Snapshot.target == nil, !needsSetup, installation.needsUpdate(recorded: UserDefaults.standard.string(forKey: Self.installedFlockKey)) {
+        if !needsSetup, installation.needsUpdate(recorded: UserDefaults.standard.string(forKey: Self.installedFlockKey)) {
             Task { await updateInstallation() }
         }
-        if Snapshot.target == nil {
-            updater.start()
-        }
+        updater.start()
     }
 
     var isRunning: Bool { status != nil }

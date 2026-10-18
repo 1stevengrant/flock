@@ -121,7 +121,6 @@ struct SetupWindow: View {
         }
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
-        .task { await Snapshot.captureIfRequested(WindowID.setup) }
     }
 
     private func run() async {
