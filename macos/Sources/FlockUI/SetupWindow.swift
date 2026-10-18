@@ -1,10 +1,11 @@
 import FlockKit
 import SwiftUI
 
-/// First start after installing: explains what setting Flock up does, runs the bundled
-/// `flock install` (two password prompts) and shows its output. The Windows app's SetupWindow.
+/// First start after installing: explains what setting Flock up does, makes sure no other local
+/// environment (Herd, Valet, ...) holds Flock's ports, runs the bundled `flock install` (two
+/// password prompts) and shows its output. The Windows app's SetupWindow.
 struct SetupWindow: View {
-    enum Stage { case intro, running, done, failed }
+    enum Stage { case intro, checking, conflicts, running, done, failed }
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismissWindow) private var dismissWindow
@@ -19,6 +20,12 @@ struct SetupWindow: View {
     private var output: String {
         get { outputState.wrappedValue }
         nonmutating set { outputState.wrappedValue = newValue }
+    }
+    /// The programs to quit before Flock can be set up, by app.
+    private let conflictsState = State<[Installation.ConflictingApp]>(initialValue: [])
+    private var conflicts: [Installation.ConflictingApp] {
+        get { conflictsState.wrappedValue }
+        nonmutating set { conflictsState.wrappedValue = newValue }
     }
     private let declinedState = State<Bool>(initialValue: false)
     private var declined: Bool {
@@ -66,6 +73,29 @@ struct SetupWindow: View {
                     Button("Not now") { dismissWindow(id: WindowID.setup) }
                         .keyboardShortcut(.cancelAction)
                     Button("Set Up Flock") { Task { await run() } }
+                        .keyboardShortcut(.defaultAction)
+                }
+
+            case .checking:
+                header("Checking Flock's ports…", nil)
+                ProgressView().progressViewStyle(.linear).padding(.horizontal, 32).padding(.bottom, 28)
+
+            case .conflicts:
+                header("Quit other local environments first", "Flock needs these ports and *.\(model.status?.dns.tld ?? "test") for itself, but other programs use them. Running both would leave neither working.")
+                Form {
+                    Section {
+                        ForEach(conflicts) { app in
+                            item(app.title, app.detail, symbol: "exclamationmark.triangle.fill", color: .orange)
+                        }
+                    }
+                }
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                buttons {
+                    Button("Not now") { dismissWindow(id: WindowID.setup) }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Check Again") { Task { await run() } }
                         .keyboardShortcut(.defaultAction)
                 }
 
@@ -124,6 +154,13 @@ struct SetupWindow: View {
     }
 
     private func run() async {
+        stage = .checking
+        conflicts = Installation.group(await model.conflicts())
+        guard conflicts.isEmpty else {
+            stage = .conflicts
+            return
+        }
+
         output = ""
         stage = .running
         let result = await model.install { line in

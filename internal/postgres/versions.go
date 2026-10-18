@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"flock/internal/binaries"
+	"flock/internal/ports"
 )
 
 // Errors of Manager operations; the API maps them to HTTP status codes.
@@ -18,6 +19,7 @@ var (
 	ErrInvalidMajor = errors.New("invalid PostgreSQL version")
 	ErrNotInstalled = errors.New("not installed")
 	ErrBusy         = errors.New("another PostgreSQL operation is in progress")
+	ErrPortTaken    = errors.New("PostgreSQL's port is taken")
 )
 
 // Service is how the Manager changes and observes the PostgreSQL service: the daemon (through
@@ -329,11 +331,19 @@ func (m *Manager) Install(ctx context.Context, major string) error {
 		return m.update(ctx, major, current, latest)
 	}
 
+	// The first major starts right away: say who holds the port before downloading.
+	activate := active == "" || !m.Installer.Installed(active)
+	if activate {
+		if taken := ports.Taken(m.Service.Port(), m.root()); taken != "" {
+			return fmt.Errorf("%w: %s", ErrPortTaken, taken)
+		}
+	}
+
 	id, err := m.Installer.Install(ctx, latest)
 	if err != nil {
 		return err
 	}
-	if active == "" || !m.Installer.Installed(active) {
+	if activate {
 		return m.activate(ctx, id, "")
 	}
 	return nil

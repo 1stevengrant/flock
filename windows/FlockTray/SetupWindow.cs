@@ -5,12 +5,13 @@ using Microsoft.UI.Xaml.Controls;
 namespace Flock.Tray;
 
 /// <summary>
-/// First start after installing: explains what setting Flock up does, runs the bundled
-/// `flock install` (one UAC prompt) and shows its output. The macOS app's onboarding sheet.
+/// First start after installing: explains what setting Flock up does, makes sure no other local
+/// environment (Herd, Laragon, ...) holds Flock's ports, runs the bundled `flock install` (one UAC
+/// prompt) and shows its output. The macOS app's onboarding sheet.
 /// </summary>
 internal sealed class SetupWindow : FlockWindow
 {
-    private enum Stage { Intro, Running, Done, Failed }
+    private enum Stage { Intro, Checking, Conflicts, Running, Done, Failed }
 
     private readonly AppModel model;
     private readonly TextBlock log = Ui.MonoText("", 12);
@@ -19,6 +20,8 @@ internal sealed class SetupWindow : FlockWindow
     // The first run's install of the default PHP and Node.js, updated in place as the status changes.
     private readonly StackPanel defaults = new() { Spacing = 4, Margin = new Thickness(0, 0, 0, 24) };
     private string output = "";
+    // The programs to quit before Flock can be set up, by app.
+    private List<ConflictingApp> conflicts = [];
     private string? startupProblem;
     private Stage stage;
     // The versions the first run installs, as last seen: the status leaves them out once both are set.
@@ -49,6 +52,20 @@ internal sealed class SetupWindow : FlockWindow
                 page.Children.Add(Buttons(
                     Ui.Button("Not now", Close),
                     Ui.Button("Set up Flock", () => _ = RunAsync(), accent: true)));
+                break;
+
+            case Stage.Checking:
+                page.Children.Add(Header("Checking Flock's ports…", null));
+                page.Children.Add(new ProgressBar { IsIndeterminate = true, Margin = new Thickness(0, 0, 0, 16) });
+                break;
+
+            case Stage.Conflicts:
+                page.Children.Add(Header("Quit other local environments first",
+                    "Flock needs these ports for itself, but other programs use them. Running both would leave neither working."));
+                page.Children.Add(Ui.Section(null, [.. conflicts.Select(app => (UIElement)Ui.Setting(app.Title, app.Detail, null, Ui.GlyphWarning))]));
+                page.Children.Add(Buttons(
+                    Ui.Button("Not now", Close),
+                    Ui.Button("Check again", () => _ = RunAsync(), accent: true)));
                 break;
 
             case Stage.Running:
@@ -110,6 +127,14 @@ internal sealed class SetupWindow : FlockWindow
 
     private async Task RunAsync()
     {
+        Render(Stage.Checking);
+        conflicts = ConflictingApp.Group(await Installation.ConflictsAsync());
+        if (conflicts.Count > 0)
+        {
+            Render(Stage.Conflicts);
+            return;
+        }
+
         output = "";
         log.Text = "";
         Render(Stage.Running);

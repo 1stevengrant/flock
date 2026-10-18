@@ -20,7 +20,7 @@ import (
 const composerURL = "https://getcomposer.org/download/latest-stable/composer.phar"
 
 func newInstallCommand() *cobra.Command {
-	var skipPrivileged, privilegedOnly bool
+	var skipPrivileged, privilegedOnly, ignoreConflicts bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -30,6 +30,14 @@ func newInstallCommand() *cobra.Command {
 			s, err := load()
 			if err != nil {
 				return err
+			}
+
+			// Another local environment on Flock's ports would leave it half working. Only the first
+			// install checks: an update runs this command too, and the daemon reports busy ports.
+			if !serviceInstalled() && !privilegedOnly && !ignoreConflicts {
+				if found := findConflicts(s); len(found) > 0 {
+					return conflictsError(found)
+				}
 			}
 
 			// With privilegedFirst, the steps that need an administrator come before anything is
@@ -108,6 +116,7 @@ func newInstallCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&skipPrivileged, "skip-privileged", false, "skip the steps that need an administrator password")
+	cmd.Flags().BoolVar(&ignoreConflicts, "ignore-conflicts", false, "set up even when other programs use Flock's ports (see `flock conflicts`)")
 	if privilegedFirst {
 		// The installer checks these before it replaces the app (see windows/installer/Flock.iss).
 		cmd.Flags().BoolVar(&privilegedOnly, "privileged-only", false, "only the steps that need an administrator")

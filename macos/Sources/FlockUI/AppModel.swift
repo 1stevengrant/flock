@@ -250,6 +250,11 @@ final class AppModel {
         return result
     }
 
+    /// Other programs on Flock's ports, which the first setup waits for the user to quit.
+    func conflicts() async -> [Installation.Conflict] {
+        await installation.conflicts()
+    }
+
     /// The setup window runs `flock install`, which registers and starts the daemon before its last steps.
     @ObservationIgnored private var isSettingUp = false
 

@@ -19,6 +19,7 @@ import (
 	"flock/internal/frankenphp"
 	"flock/internal/node"
 	"flock/internal/php"
+	"flock/internal/ports"
 	"flock/internal/project"
 )
 
@@ -461,6 +462,11 @@ func registerConfig(mux *http.ServeMux, b Backend) {
 			}
 			if other, taken := cfg.UsedPorts(id)[body.Port]; taken && other != id {
 				return invalid("port %d is used by Flock's %s service", body.Port, other)
+			}
+			if _, current := cfg.UsedPorts("")[body.Port]; !current {
+				if taken := ports.Taken(body.Port, b.Root()); taken != "" {
+					return invalid("%s", taken)
+				}
 			}
 			if x, ok := cfg.Services.Extra(id); ok {
 				x.Port = body.Port

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -143,6 +144,16 @@ func TestCatalogEndpoints(t *testing.T) {
 	}
 	if resp, body := call(t, "PATCH", srv.URL+"/v1/services/postgres", "", `{"port":3308}`); resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "mariadb") {
 		t.Fatalf("PostgreSQL on MariaDB's port: %d %s", resp.StatusCode, body)
+	}
+	// A port another program listens on is refused, naming the program.
+	other, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	busy := other.Addr().(*net.TCPAddr).Port
+	if resp, body := call(t, "PATCH", srv.URL+"/v1/services/mariadb", "", fmt.Sprintf(`{"port":%d}`, busy)); resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "pick another port") {
+		t.Fatalf("a busy port: %d %s", resp.StatusCode, body)
 	}
 
 	if resp, _ := call(t, "DELETE", srv.URL+"/v1/catalog/mariadb?delete_data=1", "", ""); resp.StatusCode != http.StatusOK {

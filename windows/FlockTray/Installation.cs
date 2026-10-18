@@ -89,6 +89,27 @@ public static class Installation
         return RunFlockAsync(bundled, ["install"], onLine);
     }
 
+    /// <summary>
+    /// Asks the bundled CLI which other programs use Flock's ports. Empty when there are none, and
+    /// when the check itself fails: `flock install` checks again and reports them.
+    /// </summary>
+    public static async Task<List<Conflict>> ConflictsAsync()
+    {
+        if (BundledFlock is not { } bundled)
+        {
+            return [];
+        }
+        var result = await RunFlockAsync(bundled, ["conflicts", "--json"]);
+        try
+        {
+            return result.Ok ? FlockJson.Decode<ConflictList>(result.Output).Conflicts : [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
     public sealed record Result(bool Ok, string Output);
 
     /// <summary>Runs the flock CLI without a console window, streaming its output.</summary>

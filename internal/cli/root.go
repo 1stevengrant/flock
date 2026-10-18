@@ -23,7 +23,7 @@ func NewRootCommand() *cobra.Command {
 	root.SetOut(os.Stdout)
 
 	root.AddCommand(
-		newInstallCommand(), newUninstallCommand(), newPrivilegedSetupCommand(),
+		newInstallCommand(), newConflictsCommand(), newUninstallCommand(), newPrivilegedSetupCommand(),
 		newDaemonCommand(), newRestartCommand(), newStatusCommand(), newLogsCommand(), newVersionCommand(), newUpdateCommand(),
 		newSitesCommand(), newLinkCommand(), newUnlinkCommand(), newParkCommand(), newUnparkCommand(),
 		newSecureCommand(true), newSecureCommand(false), newDomainCommand(), newUseCommand(),
