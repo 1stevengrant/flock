@@ -201,3 +201,97 @@ func TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS(t *testing.T) {
 		t.Errorf("example.com: the handshake took %v", time.Since(start))
 	}
 }
+
+// TestAnAliasUnderAnotherSiteWinsOverItsSubdomains checks the order Caddy tries blocks in: by the
+// longest name, which a long alias of the other site must not change, over both schemes.
+func TestAnAliasUnderAnotherSiteWinsOverItsSubdomains(t *testing.T) {
+	dir, err := os.MkdirTemp("", "flock-web-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// Each site serves who.txt with its own name.
+	root := func(name string) string {
+		d := filepath.Join(dir, name)
+		_ = os.MkdirAll(d, 0o755)
+		_ = os.WriteFile(filepath.Join(d, "index.php"), []byte("<?php\n"), 0o644)
+		_ = os.WriteFile(filepath.Join(d, "who.txt"), []byte(name), 0o644)
+		return d
+	}
+	shop, accounts := root("shop"), root("accounts")
+	ca, err := certs.Ensure(filepath.Join(dir, "certs"), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	certFile, keyFile, err := ca.SiteCert("shop.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	caPEM, _ := os.ReadFile(ca.CertPath())
+	pool.AppendCertsFromPEM(caPEM)
+	leaves := certs.NewLeaves()
+
+	cfg := Config{
+		StorageDir: filepath.Join(dir, "caddy"),
+		LogFile:    filepath.Join(dir, "web.log"),
+		HTTPPort:   freePort(t),
+		HTTPSPort:  freePort(t),
+		Bind:       "127.0.0.1",
+		TLD:        "test",
+		Issue:      func(name string) (*tls.Certificate, error) { return leaves.Get(ca, name) },
+		Sites: []Site{
+			{Domain: "shop.test", Aliases: []string{"a-really-really-long-alias-of-the-shop.test"}, Root: shop, FPM: []string{"127.0.0.1:1"}, CertFile: certFile, KeyFile: keyFile},
+			{Domain: "accounts-shop.test", Aliases: []string{"accounts.shop.test"}, Root: accounts, FPM: []string{"127.0.0.1:1"}},
+		},
+		Waiting: []Waiting{{Domain: "fresh.test", Aliases: []string{"fresh.shop.test"}, Name: "fresh", PHP: "8.5", State: WaitingInstalling}},
+	}
+	if err := Apply(cfg); err != nil {
+		t.Fatalf("%v\n%s", err, Caddyfile(cfg))
+	}
+	t.Cleanup(func() { _ = Stop() })
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: pool},
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				_, port, _ := net.SplitHostPort(addr)
+				return (&net.Dialer{}).DialContext(ctx, network, "127.0.0.1:"+port)
+			},
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	plain := func(host string) string { return fmt.Sprintf("http://%s:%d/who.txt", host, cfg.HTTPPort) }
+	secure := func(host string) string { return fmt.Sprintf("https://%s:%d/who.txt", host, cfg.HTTPSPort) }
+
+	for url, want := range map[string]string{
+		plain("accounts.shop.test"):         "accounts",
+		plain("a.b.c.d.accounts.shop.test"): "accounts",
+		secure("tenant1.shop.test"):         "shop",
+		secure("a.b.c.d.shop.test"):         "shop",
+		// accounts isn't secured: it says so rather than serving the shop.
+		secure("accounts.shop.test"):   `href="flock://secure/accounts-shop"`,
+		secure("x.accounts.shop.test"): `href="flock://secure/accounts-shop"`,
+		// fresh waits for its PHP on both schemes.
+		plain("fresh.shop.test"):    "installing PHP 8.5",
+		secure("x.fresh.shop.test"): "installing PHP 8.5",
+	} {
+		resp, err := client.Get(url)
+		if err != nil {
+			t.Errorf("%s: %v", url, err)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if !strings.Contains(string(body), want) {
+			t.Errorf("%s: want %q, got %d %q", url, want, resp.StatusCode, body)
+		}
+	}
+
+	// Plain HTTP still redirects the shop's other subdomains.
+	resp, err := client.Get(plain("tenant1.shop.test"))
+	if err != nil || resp.StatusCode != http.StatusPermanentRedirect {
+		t.Errorf("http redirect: %v %+v", err, resp)
+	}
+}
