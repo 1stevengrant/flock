@@ -135,7 +135,7 @@ Bug reports and ideas are welcome in [Issues](https://github.com/flock-php/flock
 
 Flock is built and maintained by **[Guava](https://guava.cz/en)**, a small software studio from the Czech Republic. We build custom web and mobile apps, information systems and AI tools for our clients, mostly with Laravel, Livewire and Filament.
 
-We also maintain open-source packages for the Laravel and Filament community, such as [Calendar](https://github.com/GuavaCZ/calendar), [Knowledge Base](https://github.com/GuavaCZ/filament-knowledge-base), [Icon Picker](https://github.com/GuavaCZ/filament-icon-picker), [Nested Resources](https://github.com/GuavaCZ/filament-nested-resources) and [Clusters](https://github.com/GuavaCZ/filament-clusters). See them all on [GitHub](https://github.com/GuavaCZ).
+We also maintain open-source packages for the Laravel and Filament community, such as [Calendar](https://github.com/GuavaCZ/calendar), [Knowledge Base](https://github.com/GuavaCZ/filament-knowledge-base) and [Icon Picker](https://github.com/GuavaCZ/filament-icon-picker). See them all on [GitHub](https://github.com/GuavaCZ).
 
 Need something built? [Get in touch](https://guava.cz/en).
 
@@ -145,7 +145,6 @@ Need something built? [Get in touch](https://guava.cz/en).
 - [Lukas Frey](https://github.com/lukas-frey)
 - [Stepan Mocjak](https://github.com/Uolsen)
 - [All contributors](https://github.com/flock-php/flock/graphs/contributors)
-- [Caddy](https://caddyserver.com), [Sparkle](https://sparkle-project.org), [Symfony VarDumper](https://symfony.com/doc/current/components/var_dumper.html) and the other open-source projects listed in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)
 
 ## License
 
