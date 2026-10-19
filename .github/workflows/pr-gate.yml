@@ -37,6 +37,13 @@ jobs:
               core.info(`${author} is a collaborator or bot`);
               return;
             }
+            // An org member whose membership is private shows up as a CONTRIBUTOR above; what they
+            // may do in the repository says who they are.
+            const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: author });
+            if (['admin', 'write'].includes(access.permission)) {
+              core.info(`${author} has ${access.permission} access`);
+              return;
+            }
             if (pr.state !== 'open') return;
             // An edit to the title or body doesn't re-check the issue; only a change of base does.
             if (context.payload.action === 'edited' && !context.payload.changes?.base) return;
