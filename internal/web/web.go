@@ -60,6 +60,21 @@ const (
 	WaitingUnavailable = "unavailable"
 )
 
+// Rootless is a linked site that isn't served because Flock can't tell its document root, or the
+// root has nothing to serve: the root set for it doesn't exist, a Composer project has none of the
+// usual ones, or the root has no index.php or index.html. Its names get Flock's page saying so,
+// with the folders that could be the root.
+type Rootless struct {
+	Domain      string
+	Aliases     []string
+	Name        string   // the site's name
+	State       string   // why: "missing", "not_found" or "empty" (see project.DocRoot)
+	Root        string   // the root set for the site or detected, relative to the project ("." for itself)
+	File        string   // the project file that sets Root ("" when it's set on this machine or detected)
+	Set         bool     // Root is set for the site (on this machine or in File) rather than detected
+	Suggestions []string // folders with an index.php, relative to the project
+}
+
 // Config is everything the web server needs to know.
 type Config struct {
 	StorageDir string
@@ -68,9 +83,10 @@ type Config struct {
 	HTTPSPort  int
 	// Bind is the listen host. macOS only lets non-root processes bind ports below 1024
 	// on the wildcard address, so it is empty there and non-local clients are rejected per request.
-	Bind    string
-	Sites   []Site
-	Waiting []Waiting
+	Bind     string
+	Sites    []Site
+	Waiting  []Waiting
+	Rootless []Rootless
 	// TLD limits the names HTTPS answers for; Issue makes a certificate for one of them.
 	TLD   string
 	Issue func(name string) (*tls.Certificate, error)
@@ -88,15 +104,6 @@ func (s Site) Hosts() []string {
 		}
 	}
 	return hosts
-}
-
-// DocumentRoot picks <path>/public when it has an index.php (Laravel and most frameworks), else path.
-func DocumentRoot(path string) string {
-	public := filepath.Join(path, "public")
-	if _, err := os.Stat(filepath.Join(public, "index.php")); err == nil {
-		return public
-	}
-	return path
 }
 
 // Caddyfile renders the configuration. It is exported for tests.
@@ -141,11 +148,12 @@ func Caddyfile(cfg Config) string {
 	}
 
 	// Any other name gets the "not linked" page, its host and scheme filled in by templates. A site
-	// waiting for its PHP names itself and the version, so the page says that instead.
-	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s}\n", addresses("http", []string{""}, cfg), waiting(cfg), unlinked(cfg))
+	// waiting for its PHP names itself and the version, and one without a document root says so,
+	// so the page says that instead.
+	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s}\n", addresses("http", []string{""}, cfg), waiting(cfg), rootless(cfg), unlinked(cfg))
 	// Without this, https:// to an unknown or unsecured name would fail the handshake (or hang).
 	// A linked site that isn't secured names itself, so the page asks to secure it rather than link it.
-	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s%s}\n", addresses("https", []string{""}, cfg), tlsBlock, unsecured(cfg), waiting(cfg), unlinked(cfg))
+	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s%s%s}\n", addresses("https", []string{""}, cfg), tlsBlock, unsecured(cfg), waiting(cfg), rootless(cfg), unlinked(cfg))
 
 	return b.String()
 }
@@ -170,6 +178,23 @@ func waiting(cfg Config) string {
 		hosts := Site{Domain: w.Domain, Aliases: w.Aliases}.Hosts()
 		fmt.Fprintf(&b, "\t@waiting%[1]d host %[2]s\n\tvars @waiting%[1]d {\n\t\tflock_php_site %[3]s\n\t\tflock_php %[4]s\n\t\tflock_php_state %[5]s\n\t\tflock_php_file %[6]s\n\t}\n",
 			i, strings.Join(hosts, " "), quote(w.Name), quote(w.PHP), quote(w.State), quote(w.File))
+	}
+	return b.String()
+}
+
+// rootless sets {http.vars.flock_root_*} on every host of a site without a usable document root:
+// the site's name, why, the root and whether it's set for the site, the file that sets it, and the
+// suggested roots (separated by |).
+func rootless(cfg Config) string {
+	var b strings.Builder
+	for i, r := range cfg.Rootless {
+		hosts := Site{Domain: r.Domain, Aliases: r.Aliases}.Hosts()
+		set := ""
+		if r.Set {
+			set = "1"
+		}
+		fmt.Fprintf(&b, "\t@rootless%[1]d host %[2]s\n\tvars @rootless%[1]d {\n\t\tflock_root_site %[3]s\n\t\tflock_root_state %[4]s\n\t\tflock_root %[5]s\n\t\tflock_root_set %[6]s\n\t\tflock_root_file %[7]s\n\t\tflock_root_suggestions %[8]s\n\t}\n",
+			i, strings.Join(hosts, " "), quote(r.Name), quote(r.State), quote(r.Root), quote(set), quote(r.File), quote(strings.Join(r.Suggestions, "|")))
 	}
 	return b.String()
 }

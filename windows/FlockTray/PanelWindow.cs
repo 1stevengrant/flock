@@ -332,6 +332,10 @@ internal sealed partial class PanelWindow : Window
         {
             name.Children.Add(Ui.Caption(problem, Ui.Critical));
         }
+        else if (site.Notice is { } notice)
+        {
+            name.Children.Add(Ui.Row(4, Ui.Icon(Ui.GlyphWarning, 10, Ui.Caution), Ui.Caption(notice, Ui.Caution)));
+        }
         var icon = Ui.Icon(site.Secured ? Ui.GlyphLock : Ui.GlyphGlobe, 12, site.Secured ? Ui.Success : Ui.SecondaryText);
         UIElement php = Ui.Caption($"PHP {site.Php}", wrap: false);
         if (site.Debugging)
@@ -356,7 +360,10 @@ internal sealed partial class PanelWindow : Window
             Padding = new Thickness(6, 4, 6, 4),
             IsEnabled = site.Url is not null,
         };
-        ToolTipService.SetToolTip(button, site.Url ?? site.Problem ?? site.Path);
+        // A site without a document root: say where it's fixed.
+        ToolTipService.SetToolTip(button, site.RootState == Status.DocumentRootState.NotFound
+            ? $"No public\\, www\\, web\\ or webroot\\ with an index.php in {site.Path}. Choose the document root in Settings → Sites."
+            : site.Url ?? site.Problem ?? site.Path);
         button.Click += (_, _) => AppModel.Open(site);
         return button;
     }

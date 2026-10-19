@@ -2,10 +2,11 @@ import AppKit
 import FlockKit
 import SwiftUI
 
-/// The sites in a list, and the selected one's details beside it, as in Services: its address and
-/// domains, its PHP and Node.js versions and what serves it. Each version picker offers the
-/// project's pinned version (or the default) first, then the installed versions, which isolate the
-/// site on this machine; the pin menu pins a version into the project or removes it again.
+/// The sites in a list, and the selected one's details beside it, as in Services: its address,
+/// domains and document root, its PHP and Node.js versions and what serves it. Each version picker
+/// offers the project's pinned version (or the default) first, then the installed versions, which
+/// isolate the site on this machine; the document root picker works the same way. The pin menu
+/// pins a version or the document root into the project or removes it again.
 struct SitesPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -168,10 +169,13 @@ struct SitesPane: View {
         .help(site.path)
     }
 
-    /// What a site's list row warns about: the site, one of its domains, or its FrankenPHP.
+    /// What a site's list row warns about: the site, its document root, one of its domains, or its FrankenPHP.
     private func problem(_ site: Status.Site) -> String? {
         if let problem = site.problem {
             return problem
+        }
+        if let notice = site.notice {
+            return notice
         }
         if let domain = site.domains.first(where: { $0.problem != nil }) {
             return "\(domain.host): \(domain.problem ?? "")"
@@ -275,6 +279,10 @@ struct SitesPane: View {
                         .font(.caption).foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                field("Root") {
+                    rootPicker(site)
+                }
+                rootHints(site)
             }
 
             section("Versions") {
@@ -353,6 +361,104 @@ struct SitesPane: View {
         .fixedSize()
         .help(help)
     }
+
+    /// The tag of the picker's "Choose Folder…" item, which no document root can be.
+    private static let chooseRootTag = "\u{0}choose"
+
+    /// The document root: the project's (.flockrc) or the detected one first, which follow the
+    /// project; then the folders with an index.php Flock found and the one set here, which set the
+    /// root on this machine; then any folder in the project. The tag "" means "follow".
+    private func rootPicker(_ site: Status.Site) -> some View {
+        let store = model.settings
+        let follow: String = switch (site.rootSource, site.rootPinnedHere, site.rootState) {
+        case (_, true, _): "Use .flockrc (\(rootLabel(site.rootPinned)))"
+        case (.default, _, .notFound): "Automatic (none found)"
+        case (.default, _, _): "Automatic (\(rootLabel(site.root)))"
+        default: "Automatic"
+        }
+        var folders = site.rootSuggestions
+        if site.rootSource == .isolated, !folders.contains(site.root) {
+            folders.append(site.root)
+        }
+        let help: String = switch site.rootSource {
+        case .isolated: "\(rootLabel(site.root)) is set for this site on this machine."
+        case .project: "The project sets \(rootLabel(site.root)) in .flockrc."
+        case .default: "Flock serves the first of public/, www/, web/ and webroot/ with an index.php, else the project folder."
+        }
+        return Picker("Document root", selection: Binding(
+            get: { site.rootSource == .isolated ? site.root : "" },
+            set: { root in
+                if root == Self.chooseRootTag {
+                    chooseRoot(site)
+                } else {
+                    Task { await store.perform { _ = try await $0.updateSite(site.name, SiteChange(root: root)) } }
+                }
+            }
+        )) {
+            Text(follow).tag("")
+            if !folders.isEmpty {
+                Divider()
+                ForEach(folders, id: \.self) { folder in
+                    Text(rootLabel(folder)).tag(folder)
+                }
+            }
+            Divider()
+            Text("Choose Folder…").tag(Self.chooseRootTag)
+        }
+        .labelsHidden()
+        .fixedSize()
+        .help(help)
+    }
+
+    /// Asks for a folder in the project and serves the site from it on this machine.
+    private func chooseRoot(_ site: Status.Site) {
+        let store = model.settings
+        let start = URL(fileURLWithPath: site.path)
+        guard let folder = SettingsStore.chooseDirectories(prompt: "Choose", multiple: false, in: start,
+                                                           message: "Choose the folder with the app's index.php in \(site.name).").first else { return }
+        guard let root = site.root(for: folder) else {
+            store.error = "\(folder.path) isn't in \(site.path). The document root must be a folder in the project."
+            return
+        }
+        Task { await store.perform { _ = try await $0.updateSite(site.name, SiteChange(root: root)) } }
+    }
+
+    /// Why the site isn't served from its root, and a root set here over the project's.
+    @ViewBuilder
+    private func rootHints(_ site: Status.Site) -> some View {
+        let store = model.settings
+        switch site.rootState {
+        case .notFound:
+            Text("No public/, www/, web/ or webroot/ with an index.php was found, so Flock shows a page instead of the site. Choose the folder with the app's index.php.")
+                .font(.caption).foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        case .missing:
+            Text("Choose the folder with the app's index.php, or create \(site.root).")
+                .font(.caption).foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        case .empty:
+            Text("\(rootLabel(site.root)) has no index.php or index.html, so Flock shows a page instead of the site until it does.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        case .ok:
+            if site.rootSource == .isolated, site.rootPinnedHere {
+                HStack(spacing: 4) {
+                    Text("\(rootLabel(site.root)) is set here; the project sets \(rootLabel(site.rootPinned)) in .flockrc.")
+                    Button("Use .flockrc") {
+                        Task { await store.perform { _ = try await $0.updateSite(site.name, SiteChange(root: "")) } }
+                    }
+                    .buttonStyle(.link)
+                }
+                .font(.caption).foregroundStyle(.orange)
+            }
+        }
+        Text("The folder Flock serves the site from. One picked here applies on this machine only; pin it (\(Image(systemName: "pin"))) to write it into .flockrc for everyone.")
+            .font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// "src/www", or "Project folder" for ".".
+    private func rootLabel(_ root: String) -> String { root == "." ? "Project folder" : root }
 
     /// What runs the site's PHP (PHP-FPM or FrankenPHP); on FrankenPHP also its mode (classic or
     /// Laravel Octane), its state, Restart and its log.
@@ -535,6 +641,7 @@ struct SitesPane: View {
         let nodeFile = site.nodePinnedHere ? fileName(site.nodeFile) : ".nvmrc"
         let canPinPHP = !(site.phpSource == .project && site.phpPinnedHere)
         let canPinNode = !nodeMajor.isEmpty && !(site.nodeSource == .project && site.nodePinnedHere)
+        let canPinRoot = (site.rootState == .ok || site.rootState == .empty) && site.rootSource != .project
 
         return Menu {
             if canPinPHP {
@@ -553,7 +660,15 @@ struct SitesPane: View {
                         run: { [name = site.name] client in try await client.pin(site: name, tool: "node", version: nodeMajor) })
                 }
             }
-            if site.phpPinnedHere || site.nodePinnedHere {
+            if canPinRoot {
+                Button("Pin Document Root (\(rootLabel(site.root))) to Project…") {
+                    confirm = ConfirmAction(
+                        title: "Pin the document root \(rootLabel(site.root)) to \(site.name)?", button: "Pin",
+                        message: "Writes root=\(site.root) to .flockrc in \(site.path). Commit it, and everyone using Flock on this project serves it from \(rootLabel(site.root)). This changes a file in your project.",
+                        run: { [name = site.name, root = site.root] client in try await client.pin(site: name, tool: "root", version: root) })
+                }
+            }
+            if site.phpPinnedHere || site.nodePinnedHere || site.rootPinnedHere {
                 Divider()
             }
             if site.phpPinnedHere {
@@ -572,14 +687,22 @@ struct SitesPane: View {
                         run: { [name = site.name] client in try await client.unpin(site: name, tool: "node") })
                 }
             }
+            if site.rootPinnedHere {
+                Button("Unpin Document Root (.flockrc)…") {
+                    confirm = ConfirmAction(
+                        title: "Unpin the document root from \(site.name)?", button: "Unpin",
+                        message: "Removes root= from .flockrc in \(site.path). Flock then finds the document root itself. This changes files in your project.",
+                        run: { [name = site.name] client in try await client.unpin(site: name, tool: "root") })
+                }
+            }
         } label: {
             Image(systemName: "pin")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Pin versions to the project")
-        .disabled(!canPinPHP && !canPinNode && !site.phpPinnedHere && !site.nodePinnedHere)
+        .help("Pin versions and the document root to the project")
+        .disabled(!canPinPHP && !canPinNode && !canPinRoot && !site.phpPinnedHere && !site.nodePinnedHere && !site.rootPinnedHere)
     }
 
     private func fileName(_ path: String) -> String { URL(fileURLWithPath: path).lastPathComponent }

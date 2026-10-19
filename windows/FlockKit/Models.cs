@@ -159,6 +159,20 @@ public sealed class Status
         public bool Parked { get; init; }
         public string? Url { get; init; }
         public string? Problem { get; init; }
+        /// <summary>Something that needs a decision but isn't broken, e.g. that no document root was found.</summary>
+        public string? Notice { get; init; }
+        /// <summary>
+        /// The document root relative to Path, with / ("." for the project folder); RootSource says
+        /// why: set on this machine (isolated), in the project's .flockrc, or detected (default).
+        /// </summary>
+        public string Root { get; init; } = ".";
+        public string RootSource { get; init; } = VersionSource.Default;
+        /// <summary>What the project's .flockrc says (in RootFile), also when this machine's root wins over it.</summary>
+        public string RootPinned { get; init; } = "";
+        public string RootFile { get; init; } = "";
+        /// <summary>"" when the site is served from Root, else one of DocumentRootState; RootSuggestions are then folders with an index.php.</summary>
+        public string RootState { get; init; } = "";
+        public List<string> RootSuggestions { get; init; } = [];
         public List<SiteDomain> Domains { get; init; } = [];
         /// <summary>PhpStorm breakpoints send every request of the site to Xdebug.</summary>
         public bool Debugging { get; init; }
@@ -184,9 +198,41 @@ public sealed class Status
         [System.Text.Json.Serialization.JsonIgnore]
         public bool NodePinnedHere => NodeFile.Length > 0 && SameDir(NodeFile, Path);
 
+        /// <summary>root= is only read from the .flockrc in the site's own folder.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool RootPinnedHere => RootPinned.Length > 0;
+
+        /// <summary>
+        /// A folder as a document root of the site: relative to Path with / ("src/www", "." for the
+        /// project folder itself), or null when the folder isn't in the project.
+        /// </summary>
+        public string? RootFor(string folder)
+        {
+            // Split by hand, as in SameDir, so the tests run anywhere.
+            static string[] Parts(string path) => path.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+            var project = Parts(Path);
+            var chosen = Parts(folder);
+            if (chosen.Length < project.Length || !project.SequenceEqual(chosen[..project.Length], StringComparer.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+            return chosen.Length == project.Length ? "." : string.Join('/', chosen[project.Length..]);
+        }
+
         // Splits by hand rather than with Path.GetDirectoryName, which ignores '\\' off Windows (tests run anywhere).
         private static bool SameDir(string file, string dir) =>
             string.Equals(file[..Math.Max(0, file.LastIndexOfAny(['\\', '/']))].TrimEnd('\\', '/'), dir.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Values of Site.RootState: why Flock serves its page instead of the site.</summary>
+    public static class DocumentRootState
+    {
+        /// <summary>The root set on this machine or in .flockrc isn't a folder.</summary>
+        public const string Missing = "missing";
+        /// <summary>A Composer project without an index.php in public/, www/, web/, webroot/ or its own folder.</summary>
+        public const string NotFound = "not_found";
+        /// <summary>The root has neither an index.php nor an index.html (yet).</summary>
+        public const string Empty = "empty";
     }
 
     /// <summary>Values of Site.Server and Site.Worker.</summary>
