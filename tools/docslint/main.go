@@ -1,6 +1,7 @@
 // Command docslint checks the documentation in docs/ that flockphp.com shows: that navigation.json
-// and the pages agree, that every :::app and :::cli block is closed, and that relative links and
-// images point at files that exist. Run it from the repository root:
+// and the pages agree, that every :::app and :::cli block is closed, that relative links and
+// images point at files that exist, and that a screenshot:id image has all of its variants or
+// none yet. Run it from the repository root:
 //
 //	go run ./tools/docslint
 //
@@ -37,6 +38,12 @@ var (
 )
 
 var imageExtensions = []string{".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+// The variants of each screenshot:id image.
+var (
+	screenshotPlatforms = []string{"macos", "windows"}
+	screenshotThemes    = []string{"light", "dark"}
+)
 
 // navigation.json: the sidebar's sections and their pages, in order.
 type section struct {
@@ -183,6 +190,10 @@ func lintTarget(root, name string, line int, image bool, target string, report f
 	if strings.HasPrefix(target, "#") {
 		return
 	}
+	if id, ok := strings.CutPrefix(target, "screenshot:"); ok {
+		lintScreenshot(root, name, line, image, id, report)
+		return
+	}
 	if s := scheme.FindString(target); s != "" {
 		if !slices.Contains([]string{"http:", "https:", "mailto:"}, strings.ToLower(s)) {
 			report(name, line, "%s: link to a file in docs/ by its path, or to a full URL", target)
@@ -207,6 +218,32 @@ func lintTarget(root, name string, line int, image bool, target string, report f
 	}
 	if image && !slices.Contains(imageExtensions, strings.ToLower(path.Ext(clean))) {
 		report(name, line, "%s isn't an image (%s)", target, strings.Join(imageExtensions, ", "))
+	}
+}
+
+// lintScreenshot checks a screenshot:id image. Its files are images/{id}-{platform}-{theme}.png,
+// as tools/screenshots' FlockScreenshots renders them. Until they're added, the website shows a
+// placeholder; once any is there, all of them must be.
+func lintScreenshot(root, name string, line int, image bool, id string, report func(string, int, string, ...any)) {
+	if !image {
+		report(name, line, "screenshot:%s is for images: ![Alt](screenshot:%s)", id, id)
+		return
+	}
+	if !slugPattern.MatchString(id) {
+		report(name, line, "screenshot:%s: an id may only have lowercase letters, digits and dashes", id)
+		return
+	}
+	var missing []string
+	for _, platform := range screenshotPlatforms {
+		for _, theme := range screenshotThemes {
+			file := fmt.Sprintf("images/%s-%s-%s.png", id, platform, theme)
+			if !exists(filepath.Join(root, filepath.FromSlash(file))) {
+				missing = append(missing, file)
+			}
+		}
+	}
+	if len(missing) > 0 && len(missing) < len(screenshotPlatforms)*len(screenshotThemes) {
+		report(name, line, "screenshot:%s is missing %s", id, strings.Join(missing, ", "))
 	}
 }
 

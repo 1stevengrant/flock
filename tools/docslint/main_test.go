@@ -14,7 +14,7 @@ const navigation = `[
   ]}
 ]`
 
-const introduction = "# Introduction\n\nStart with [Sites](sites.md#linking), see [below](#more) or [the changelog](https://flockphp.com/changelog).\n\n![The app](images/app.png)\n\n:::app\nClick **Link**.\n:::\n\n:::cli\n```bash\nflock link\n:::\n```\n:::\n\nWrite `[x](nowhere.md)` for a link.\n"
+const introduction = "# Introduction\n\nStart with [Sites](sites.md#linking), see [below](#more) or [the changelog](https://flockphp.com/changelog).\n\n![The app](images/app.png)\n\n![Not taken yet](screenshot:settings-php)\n\n![Taken](screenshot:panel)\n\n:::app\nClick **Link**.\n:::\n\n:::cli\n```bash\nflock link\n:::\n```\n:::\n\nWrite `[x](nowhere.md)` for a link.\n"
 
 func write(t *testing.T, root string, files map[string]string) {
 	t.Helper()
@@ -32,11 +32,15 @@ func write(t *testing.T, root string, files map[string]string) {
 func valid(t *testing.T) string {
 	root := t.TempDir()
 	write(t, root, map[string]string{
-		"navigation.json":  navigation,
-		"introduction.md":  introduction,
-		"sites.md":         "# Sites\n",
-		"images/app.png":   "png",
-		"images/notes.txt": "",
+		"navigation.json":                navigation,
+		"introduction.md":                introduction,
+		"sites.md":                       "# Sites\n",
+		"images/app.png":                 "png",
+		"images/notes.txt":               "",
+		"images/panel-macos-light.png":   "png",
+		"images/panel-macos-dark.png":    "png",
+		"images/panel-windows-light.png": "png",
+		"images/panel-windows-dark.png":  "png",
 	})
 	return root
 }
@@ -71,7 +75,10 @@ func TestProblems(t *testing.T) {
 		{"not an image", map[string]string{"sites.md": "![Notes](images/notes.txt)\n"}, "images/notes.txt isn't an image"},
 		{"outside docs", map[string]string{"sites.md": "See [the README](../README.md).\n"}, "../README.md points outside docs/"},
 		{"site path", map[string]string{"sites.md": "See [the roadmap](/changelog#roadmap).\n"}, "/changelog#roadmap: link to another page by its file"},
-		{"old screenshot", map[string]string{"sites.md": "![Sites](screenshot:sites)\n"}, "screenshot:sites: link to a file in docs/"},
+		{"unknown scheme", map[string]string{"sites.md": "![Sites](shot:sites)\n"}, "shot:sites: link to a file in docs/"},
+		{"screenshot as link", map[string]string{"sites.md": "[Sites](screenshot:sites)\n"}, "screenshot:sites is for images"},
+		{"bad screenshot id", map[string]string{"sites.md": "![Sites](screenshot:Sites_1)\n"}, "screenshot:Sites_1: an id may only"},
+		{"partial screenshot", map[string]string{"sites.md": "![Sites](screenshot:sites)\n", "images/sites-macos-light.png": "png"}, "screenshot:sites is missing images/sites-macos-dark.png, images/sites-windows-light.png, images/sites-windows-dark.png"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
