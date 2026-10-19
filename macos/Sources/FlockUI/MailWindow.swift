@@ -26,7 +26,7 @@ struct MailWindow: View {
             }
             .overlay {
                 if store.messages.isEmpty {
-                    ContentUnavailableView("No mail", systemImage: "envelope.open", description: Text(emptyHint))
+                    ContentUnavailableView("No mail", systemImage: "envelope.open")
                 }
             }
             .frame(minWidth: 260, idealWidth: 320, maxWidth: 340)
@@ -73,15 +73,6 @@ struct MailWindow: View {
                 self.selection = nil
             }
         }
-    }
-
-    /// Where to send mail, from the daemon's status.
-    private var emptyHint: String {
-        guard let status = model.status else { return "Flock is not running." }
-        if status.mail.isEmpty {
-            return "The mail catcher isn't running — start it in Settings → Services."
-        }
-        return "Send mail to \(status.mail). MAIL_USERNAME picks the inbox."
     }
 }
 
