@@ -34,6 +34,8 @@ flock domain remove acme-admin.test
 ```
 :::
 
+An alias can also sit under another site's domain. If another project has the alias `accounts.acme.test`, that name and its subdomains reach that project, and the rest of `*.acme.test` still reaches `acme`.
+
 ## How .test resolution works
 
 Flock runs its own small DNS server, so new sites resolve instantly without changing your hosts file:
