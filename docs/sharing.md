@@ -17,7 +17,7 @@ flock share
 
 Run it inside the project folder, or name the site: `flock share acme`. Flock copies the URL to your clipboard and prints a QR code. The site stays shared until you press **Ctrl+C**.
 
-To stop a share you started in the app:
+`flock status` lists every active share with its URL and when it ends. To stop a share you started in the app:
 
 ```bash
 flock share acme --stop
