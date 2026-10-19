@@ -132,6 +132,38 @@ public class DecodingTests
     }
 
     [Fact]
+    public void DecodesASitesShare()
+    {
+        var status = FlockJson.Decode<Status>("""
+            {"version":"dev","pid":1,"started_at":"2026-10-19T14:10:01Z","dns":{"tld":"test","addr":""},
+             "http_port":80,"https_port":443,"mail":"","xdebug":false,"dumps":false,"mail_count":0,"dump_count":0,"processes":[],
+             "sites":[{"name":"shop","domain":"shop.test","path":"C:\\code\\shop","php":"8.4","secured":true,"parked":false,
+                       "share":{"site":"shop","state":"running","url":"https://quiet-river-lamp.trycloudflare.com","allow":["*@acme.com"],
+                                "started_at":"2026-10-19T14:10:01Z","expires_at":"2026-10-19T22:10:05Z","built":true,"can_rebuild":true,
+                                "rebuilding":false,"log":"share-shop","qr":"iVBORw0KGgo="}},
+                      {"name":"blog","domain":"blog.test","path":"C:\\code\\blog","php":"8.4","secured":false,"parked":false,
+                       "share":{"site":"blog","state":"failed","allow":null,"started_at":"2026-10-19T14:10:01Z","built":false,
+                                "can_rebuild":false,"rebuilding":false,"error":"cloudflared exited","log":"share-blog"}},
+                      {"name":"old","domain":"old.test","path":"C:\\code\\old","php":"8.3","secured":false,"parked":true}]}
+            """);
+
+        var shop = status.Sites[0];
+        Assert.True(shop.IsShared);
+        Assert.Equal(("https://quiet-river-lamp.trycloudflare.com", "share-shop"), (shop.Share!.Url, shop.Share.Log));
+        Assert.Equal(["*@acme.com"], shop.Share.Allow);
+        Assert.Equal(new DateTimeOffset(2026, 10, 19, 22, 10, 5, TimeSpan.Zero), shop.Share.ExpiresAt);
+        Assert.True(shop.Share.CanRebuild);
+        Assert.Equal("iVBORw0KGgo=", shop.Share.Qr);
+        var blog = status.Sites[1];
+        Assert.False(blog.IsShared);
+        Assert.True(blog.Share!.IsFailed);
+        Assert.Empty(blog.Share.Allow);
+        Assert.Null(blog.Share.ExpiresAt);
+        Assert.Equal("cloudflared exited", blog.Share.Error);
+        Assert.Null(status.Sites[2].Share);
+    }
+
+    [Fact]
     public void DecodesTheFrankenPhpBuilds()
     {
         var state = FlockJson.Decode<FrankenPhpState>("""

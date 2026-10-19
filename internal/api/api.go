@@ -20,6 +20,7 @@ import (
 	"flock/internal/frankenphp"
 	"flock/internal/php"
 	"flock/internal/postgres"
+	"flock/internal/share"
 	"flock/internal/supervisor"
 )
 
@@ -128,6 +129,8 @@ type SiteStatus struct {
 	// Boost is whether the project uses Laravel Boost and has Flock's guideline (see package boost):
 	// "" (no Boost), "missing", "current", "outdated" or "custom".
 	Boost string `json:"boost,omitempty"`
+	// Share is the site's tunnel (`flock share`), while there is one.
+	Share *share.Status `json:"share,omitempty"`
 }
 
 // FrankenPHP states of a site.
@@ -208,6 +211,10 @@ type Backend interface {
 	Binaries() *binaries.Catalog
 	// RestartSite restarts a FrankenPHP site's process, e.g. so Octane's workers load changed code.
 	RestartSite(name string) error
+	// Shares runs the sites' tunnels (nil when unavailable); StartShare starts one after checking
+	// that the site can be shared.
+	Shares() *share.Manager
+	StartShare(site string, allow []string) error
 }
 
 // NewHandler builds the API routes. A non-empty token requires `Authorization: Bearer <token>`
@@ -252,6 +259,7 @@ func NewHandler(b Backend, token string) http.Handler {
 	registerLogs(mux, b)
 	registerMCP(mux, b)
 	registerBoost(mux, b)
+	registerShares(mux, b)
 
 	if token == "" {
 		return mux

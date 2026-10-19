@@ -71,6 +71,8 @@ type Config struct {
 	Bind    string
 	Sites   []Site
 	Waiting []Waiting
+	// Shares are sites served to tunnels, each on a loopback port of its own (see Share).
+	Shares []Share
 	// TLD limits the names HTTPS answers for; Issue makes a certificate for one of them.
 	TLD   string
 	Issue func(name string) (*tls.Certificate, error)
@@ -146,6 +148,10 @@ func Caddyfile(cfg Config) string {
 	// Without this, https:// to an unknown or unsecured name would fail the handshake (or hang).
 	// A linked site that isn't secured names itself, so the page asks to secure it rather than link it.
 	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s%s}\n", addresses("https", []string{""}, cfg), tlsBlock, unsecured(cfg), waiting(cfg), unlinked(cfg))
+
+	for _, s := range cfg.Shares {
+		b.WriteString(shareBlock(s))
+	}
 
 	return b.String()
 }

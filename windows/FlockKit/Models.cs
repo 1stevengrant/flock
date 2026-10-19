@@ -173,9 +173,14 @@ public sealed class Status
         public SiteFrankenPhp? FrankenPhp { get; init; }
         /// <summary>Whether the project uses Laravel Boost and has Flock's guideline: "" (no Boost) or one of BoostState.</summary>
         public string Boost { get; init; } = "";
+        /// <summary>The site's tunnel (`flock share`), while there is one.</summary>
+        public SiteShare? Share { get; init; }
 
         [JsonIgnore]
         public bool IsFrankenPhp => Server == SiteServer.FrankenPhp;
+
+        [JsonIgnore]
+        public bool IsShared => Share?.IsRunning == true;
 
         /// <summary>The project file pinning PHP sits in the site's own folder (so it can be unpinned here).</summary>
         [System.Text.Json.Serialization.JsonIgnore]
@@ -237,6 +242,49 @@ public sealed class Status
 
         [JsonIgnore]
         public bool HasProgress => Progress is >= 0 and <= 1;
+    }
+
+    /// <summary>
+    /// A site shared at a temporary public URL through a Cloudflare quick tunnel. It is followed
+    /// through the status: building the assets, starting the tunnel, running, or failed (see Error).
+    /// </summary>
+    public sealed class SiteShare
+    {
+        public string Site { get; init; } = "";
+        /// <summary>One of ShareState.</summary>
+        public string State { get; init; } = "";
+        public string? Url { get; init; }
+        /// <summary>Emails (or *@domain) let in; empty: anyone with the URL.</summary>
+        public List<string> Allow { get; init; } = [];
+        public DateTimeOffset StartedAt { get; init; }
+        /// <summary>Set once running: the share ends then.</summary>
+        public DateTimeOffset? ExpiresAt { get; init; }
+        /// <summary>The assets were built for the share.</summary>
+        public bool Built { get; init; }
+        /// <summary>The project's assets are built by Flock (Vite), so they can be rebuilt while shared.</summary>
+        public bool CanRebuild { get; init; }
+        public bool Rebuilding { get; init; }
+        public string? RebuildError { get; init; }
+        public string? Error { get; init; }
+        /// <summary>Name for /v1/logs/services/{name}.</summary>
+        public string Log { get; init; } = "";
+        /// <summary>The URL as a QR code: a base64 PNG.</summary>
+        public string? Qr { get; init; }
+
+        [JsonIgnore]
+        public bool IsRunning => State == ShareState.Running;
+
+        [JsonIgnore]
+        public bool IsFailed => State == ShareState.Failed;
+    }
+
+    /// <summary>Values of SiteShare.State.</summary>
+    public static class ShareState
+    {
+        public const string Building = "building";
+        public const string Starting = "starting";
+        public const string Running = "running";
+        public const string Failed = "failed";
     }
 
     /// <summary>Where a site's PHP or Node.js version comes from, in this order.</summary>

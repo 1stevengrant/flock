@@ -345,6 +345,12 @@ internal sealed partial class PanelWindow : Window
         {
             php = Ui.Row(6, Ui.Badge(site.Worker == Status.SiteServer.Octane ? "Octane" : "FrankenPHP", Ui.Tone.Neutral), php);
         }
+        if (site.IsShared)
+        {
+            var shared = Ui.Badge("Shared");
+            ToolTipService.SetToolTip(shared, $"Shared at {site.Share!.Url}");
+            php = Ui.Row(6, shared, php);
+        }
         var row = Ui.Spread(Ui.Row(8, icon, name), php);
 
         var button = new Button

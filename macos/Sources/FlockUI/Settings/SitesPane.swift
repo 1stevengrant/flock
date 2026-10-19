@@ -32,6 +32,12 @@ struct SitesPane: View {
         get { restartingState.wrappedValue }
         nonmutating set { restartingState.wrappedValue = newValue }
     }
+    /// The site the Share sheet is open for.
+    private let sharingState = State<String?>(initialValue: nil)
+    private var sharing: String? {
+        get { sharingState.wrappedValue }
+        nonmutating set { sharingState.wrappedValue = newValue }
+    }
 
     var body: some View {
         let store = model.settings
@@ -92,6 +98,15 @@ struct SitesPane: View {
         }
         .sheet(item: extensionsState.projectedValue) { site in
             SiteExtensionsSheet(site: site)
+        }
+        .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
+            ShareSheet(site: sharing ?? "") { allow in
+                let name = sharing ?? ""
+                sharing = nil
+                startShare(name, allow: allow)
+            } cancel: {
+                sharing = nil
+            }
         }
         .confirmationDialog(confirm?.title ?? "", isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }), presenting: confirm) { action in
             Button(action.button, role: action.destructive ? .destructive : nil) {
@@ -275,6 +290,10 @@ struct SitesPane: View {
                         .font(.caption).foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+
+            section("Share") {
+                shareFields(site)
             }
 
             section("Versions") {
@@ -510,6 +529,105 @@ struct SitesPane: View {
         }
     }
 
+    /// The site's share (`flock share`): Share… when there is none, then its progress, its URL with
+    /// a QR code while it runs, or why it failed.
+    @ViewBuilder
+    private func shareFields(_ site: Status.Site) -> some View {
+        let store = model.settings
+        let stop: () -> Void = { _ = Task { await store.perform { try await $0.stopShare(site: site.name) } } }
+        if let share = site.share {
+            switch share.state {
+            case .building, .starting, .unknown:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(share.state == .building ? "Building assets…" : "Starting the tunnel…")
+                    Spacer(minLength: 8)
+                    Button("Stop") { stop() }
+                }
+                .font(.callout)
+            case .running:
+                runningShare(site, share, stop: stop)
+            case .failed:
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(share.error ?? "Sharing failed.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button("Try Again") { startShare(site.name, allow: share.allow) }
+                        Button("Dismiss") { stop() }
+                    }
+                }
+                .font(.callout)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button("Share…") { sharing = site.name }
+                    .disabled(site.url == nil)
+                Text("Show the site at a temporary public address to preview work in progress, never for production. Visitors don't get debug pages, dumps or the dev tools.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// A running share: its URL, Copy, the QR code, when it ends, who may open it, and Rebuild / Stop.
+    private func runningShare(_ site: Status.Site, _ share: ShareStatus, stop: @escaping () -> Void) -> some View {
+        let store = model.settings
+        let url = share.url ?? ""
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                if let link = URL(string: url) {
+                    Link(url, destination: link)
+                        .font(.callout)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                }
+                .controlSize(.small)
+            }
+            if let data = share.qrPNG, let image = NSImage(data: data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: 160, height: 160)
+                    .accessibilityLabel("QR code of \(url)")
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                if let expires = share.expiresAt {
+                    Text("Ends at \(expires.formatted(date: .omitted, time: .shortened))")
+                }
+                if !share.allow.isEmpty {
+                    Text("Only for: \(share.allow.joined(separator: ", "))")
+                }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            if let error = share.rebuildError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                if share.canRebuild {
+                    Button(share.rebuilding ? "Rebuilding…" : "Rebuild Assets") {
+                        Task { await store.perform { _ = try await $0.rebuildShare(site: site.name) } }
+                    }
+                    .disabled(share.rebuilding)
+                    .help("Runs npm run build again, so visitors see your latest changes when they reload")
+                }
+                Button("Stop Sharing") { stop() }
+            }
+        }
+    }
+
+    private func startShare(_ site: String, allow: [String]) {
+        Task { await model.settings.perform { _ = try await $0.startShare(site: site, allow: allow) } }
+    }
+
     /// The project uses Laravel Boost, and Flock's guideline is missing from it or outdated.
     private func boost(_ site: Status.Site) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -596,4 +714,35 @@ private struct ConfirmAction: Identifiable, Sendable {
     let message: String
     let run: @Sendable (FlockClient) async throws -> Status
     var id: String { title }
+}
+
+/// Asks who may open a share before it starts: anyone with the link, or only the emails listed.
+private struct ShareSheet: View {
+    let site: String
+    let share: ([String]) -> Void
+    let cancel: () -> Void
+    private let allowState = State<String>(initialValue: "")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Share \(site)").font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Only these people (optional)")
+                TextField("colleague@acme.com, *@client.com", text: allowState.projectedValue)
+                    .textFieldStyle(.roundedBorder)
+            }
+            Text("Anyone with the link can open the site unless you list email addresses — Cloudflare then emails them a code. The link stops working after 8 hours or when you stop sharing.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { cancel() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Share") { share(ShareStatus.parseAllow(allowState.wrappedValue)) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
 }
