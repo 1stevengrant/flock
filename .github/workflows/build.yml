@@ -68,8 +68,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   # What a pull request changes: "code" unless it's only docs/, "docs" if any of docs/. Into main
-  # it's always "code": a skipped matrix job reports under its unexpanded name, so main's required
-  # "Go tests (...)" checks would never pass.
+  # it's always "code", so everything that's released has had the Go tests run on it.
   # (With git, not the API: beta.yml and release.yml call this workflow with contents: read only.)
   changes:
     runs-on: ubuntu-latest
@@ -123,10 +122,11 @@ jobs:
         run: go run ./tools/docslint
 
   # The Go tests on both platforms Flock supports (the race detector needs cgo, so macOS only).
+  # Without code changes the steps are skipped, not the job: a skipped matrix job reports under its
+  # unexpanded name, so the required "Go tests (...)" checks would never pass.
   go-test:
     name: Go tests (${{ matrix.name }})
     needs: [version, changes]
-    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -134,24 +134,30 @@ jobs:
           - { name: macOS, os: macos-26, flags: -race }
           - { name: Windows, os: windows-2025, flags: "" }
     runs-on: ${{ matrix.os }}
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
     steps:
       - uses: actions/checkout@v7
+        if: env.CODE == 'true'
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
 
       - uses: actions/setup-go@v7
+        if: env.CODE == 'true'
         with:
           go-version-file: go.mod
 
       - name: Vet
+        if: env.CODE == 'true'
         run: go vet ./...
 
       - name: Test
+        if: env.CODE == 'true'
         run: go test ${{ matrix.flags }} ./...
 
       # The licenses that ship with the builds; run `make notices` after changing dependencies.
       - name: Third-party notices
-        if: matrix.name == 'macOS'
+        if: env.CODE == 'true' && matrix.name == 'macOS'
         run: go run ./tools/notices -check
 
   # On pull requests the apps are only compiled and tested (unsigned, no secrets, so forks get it
