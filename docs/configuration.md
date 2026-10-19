@@ -7,7 +7,7 @@ Most settings are changed from the Flock app or the CLI. This page describes whe
 | File | Purpose |
 | --- | --- |
 | `.flockrc` | PHP (`php=8.5`) and optionally Node (`node=22`) versions for the project. Commit it. |
-| `.nvmrc` / `.node-version` | Node version, read the same way as by nvm and other tools. |
+| `.nvmrc` / `.node-version` | Node version, read the same way as by nvm and other tools. Only version numbers count; aliases like `lts/*` are ignored. |
 
 Project files are looked up from the current directory upwards. See [Per-project versions](project-versions.md).
 
@@ -20,8 +20,6 @@ Flock keeps PHP and Node builds, service data, certificates, caught mail and log
 | Windows | `%AppData%\Flock` |
 | macOS | `~/Library/Application Support/Flock` |
 
-Set the `FLOCK_HOME` environment variable to use a different location.
-
 :::app
 **Settings → General** shows the exact path under **Data**, and **Show in Finder** (macOS) or **Show in Explorer** (Windows) opens it.
 :::
@@ -32,7 +30,7 @@ Global settings live in `config.json` in the data directory. Edit them through t
 
 - the TLD (default `test`),
 - the default PHP and Node versions,
-- Xdebug, dump capture and PHP auto-build switches,
+- the release channel (stable, beta), and the Xdebug and dump capture switches,
 - parked folders and linked sites, with their PHP and Node versions, HTTPS state and extra domains,
 - the ports Flock uses.
 
@@ -48,10 +46,10 @@ Global settings live in `config.json` in the data directory. Edit them through t
 | 53531 | Local API used by the apps (token protected) |
 | 5432, 3306, 6379, … | Services, see [Databases & services](services.md) |
 
-Each service's port can be changed when you install it, or later (see [Databases & services](services.md#installing-and-removing)). Flock warns you, naming the program, if a port is already taken. The web server and DNS ports are set when Flock is set up with `flock install`.
+Each service's port can be changed when you install it, or later (see [Databases & services](services.md#installing-and-removing)). Flock warns you, naming the program, if a port is already taken.
 
 :::app
-**Settings → General** shows the domain and the web server ports under **Network**.
+**Settings → General** shows the domain under **Network**.
 :::
 
 ## php.ini

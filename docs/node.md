@@ -4,10 +4,10 @@ Flock manages Node.js the same way as PHP. Versions are installed side by side, 
 
 ## Installing versions
 
-Flock uses the official builds from nodejs.org, verified against their checksums. Node 16 and newer are supported.
+Flock installs the official Node.js builds from its signed package list, the newest release of each major. Node 16 and newer are supported.
 
 :::app
-Open **Settings…** from the Flock panel and go to **Node**. Each line shows its status (**LTS**, **Current**, **Maintenance** or **End of life**) and its npm version. Click **Install** next to a line, or **Update to …** when a newer release is out. **Update npm** appears when a newer npm is available, and **Check now** looks for new releases.
+Open **Settings…** from the Flock panel and go to **Node**. Each major shows its newest release and the npm version that comes with it. Click **Install** next to a line, or **Update to …** when a newer release is out. **Update npm** appears when a newer npm is available, and **Check now** looks for new releases.
 
 ![Settings → Node](screenshot:settings-node)
 
@@ -16,11 +16,13 @@ To remove a version, open its **⋯** menu and choose **Uninstall…**.
 
 :::cli
 ```bash
-flock node install 22        # latest 22.x
-flock node install 22.11.0   # an exact version
+flock node install 22        # the newest 22.x
+flock node install 22.11     # also the newest 22.x
 flock node list
 ```
 :::
+
+If a project needs a Node version that isn't installed yet, `node`, `npm` and `npx` offer to install it when you run them in a terminal.
 
 ## The default version
 
@@ -44,6 +46,7 @@ Flock picks the Node version in this order:
 4. the default.
 
 Most projects already have an `.nvmrc`, so they work without any changes.
+A project that pins an exact release (`22.11.0` in `.nvmrc`) gets the newest release of that major, since Flock keeps one release per major; `flock node install` says so when it installs it.
 
 :::app
 Choose a version for a site in **Settings → Sites** to isolate it, or pin it to the project with **Pin Node 22 to Project…**.

@@ -5,16 +5,16 @@ Flock is a free, open-source local development environment for Laravel on **Wind
 ## What Flock manages
 
 - **Sites**: every project is served on a `.test` domain, optionally over HTTPS with a locally trusted certificate.
-- **PHP**: versions 8.1 to 8.5 side by side, with the common extensions built in and Xdebug ready to switch on.
+- **PHP**: versions 8.1 to 8.5 side by side (on Windows also 7.4 and 8.0), with the common extensions built in and Xdebug ready to switch on.
 - **Node.js**: official builds from Node 16 up, chosen per project from `.nvmrc` or `.flockrc`.
-- **Services**: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Meilisearch, Typesense and RustFS.
+- **Services**: PostgreSQL, MySQL, MariaDB, MongoDB, Valkey, Redis, Meilisearch, Typesense and RustFS.
 - **Tools**: a mail catcher, a `dump()` viewer, a Laravel log viewer and one-click Xdebug.
 
 ## How it works
 
 Flock is a single `flock` binary that runs as a small background service (the *daemon*):
 
-- An embedded [Caddy](https://caddyserver.com) web server listens on ports 80 and 443 and passes PHP requests to PHP-FPM (macOS) or a pool of `php-cgi` workers (Windows).
+- An embedded [Caddy](https://caddyserver.com) web server listens on ports 80 and 443 and passes PHP requests to PHP-FPM (macOS) or a pool of `php-cgi` workers (Windows). A site can also run on [FrankenPHP](php.md#frankenphp), with Laravel Octane's worker mode if you like.
 - An embedded DNS server answers for `*.test`, so new sites work immediately without editing your hosts file.
 - A local certificate authority issues HTTPS certificates. Its root is restricted to your local TLD, so it can't be used to impersonate real websites.
 - Small **shims** for `php`, `composer`, `node`, `npm`, `npx` and the database clients sit on your PATH and run the version that the current project uses.
@@ -39,7 +39,7 @@ You're reading the **CLI** version: steps show the `flock` commands to run in a 
 
 Flock serves `public/index.php` when a project has one, which covers Laravel, Symfony, Statamic, Craft and most other PHP frameworks. Otherwise it serves the project folder itself, which also covers plain PHP and static sites.
 
-> Lightweight support for Python and .NET projects is on the [roadmap](https://flockphp.com/changelog#roadmap).
+> Other languages and frameworks are on the roadmap.
 
 ## Next steps
 
