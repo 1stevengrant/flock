@@ -1,14 +1,14 @@
 # Installation
 
-Download the installer for your platform from the [download page](https://flockphp.com/download).
+Download the installer for your platform from the [download page](https://flockphp.com/download). Both apps are code-signed, and the macOS app is notarized by Apple, so they open without security warnings.
 
 ## Windows
 
-**Requirements:** Windows 10 or 11 (x64; Arm64 runs under emulation) and the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe), which PHP needs.
+**Requirements:** Windows 10 (version 2004 or newer) or Windows 11, x64, and the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe), which PHP needs.
 
-1. Run `Flock-Setup-x64.exe`. Windows asks for administrator approval once.
-2. Optionally keep **Open Flock when I sign in** checked.
-3. The tray app opens and runs the setup.
+1. Run `Flock-Setup-<version>-x64.exe`. The installer itself doesn't need administrator rights.
+2. The tray app opens with the first-run setup. Optionally keep **Open Flock when I sign in** checked.
+3. Click **Set up Flock**. Windows asks for administrator approval once.
 
 The setup:
 
@@ -17,25 +17,16 @@ The setup:
 - routes `*.test` to Flock's DNS server with a name-resolution policy rule, and installs a small helper service that keeps a `# BEGIN Flock` block in your hosts file as a fallback,
 - adds Flock's certificate authority to the Trusted Root store.
 
-### Command-line install
-
-You can also install without the app: put `flock.exe` and `flock-helper.exe` in a folder and run
-
-```bash
-.\flock.exe install
-```
-
 ## macOS
 
-**Requirements:** macOS 15 Sequoia or newer, on Apple silicon (Intel Macs are not supported). The Xcode Command Line Tools (`xcode-select --install`) are needed when Flock compiles a PHP version locally.
+**Requirements:** macOS 15 Sequoia or newer, on Apple silicon (Intel Macs are not supported).
 
-1. Open `Flock.dmg` and drag **Flock** to Applications.
+1. Open `Flock-<version>-macOS.dmg` and drag **Flock** to Applications.
 2. Start Flock. A bird appears in your menu bar and the first-run setup opens.
-3. Click **Set Up Flock** and enter your password once, so Flock can add the DNS resolver and trust its certificate authority.
+3. Optionally keep **Open Flock's menu bar app at login** checked.
+4. Click **Set Up Flock**. macOS asks for your password twice: once to add the DNS resolver, and once to trust Flock's certificate authority.
 
-> Preview builds aren't notarized yet. If macOS refuses to open the app, right-click it in Applications, choose **Open** and confirm.
-
-The setup adds the shims to your PATH, registers a launchd agent for the daemon, writes `/etc/resolver/test` so `.test` names go to Flock's DNS server, and trusts the certificate authority in the System keychain.
+The setup adds the shims to your PATH, registers a launchd agent for the daemon, writes `/etc/resolver/test` so `.test` names go to Flock's DNS server, and trusts the certificate authority in your login keychain.
 
 ## Checking the installation
 
@@ -67,16 +58,4 @@ Stop that program, then click **Restart** at the bottom of the Flock panel.
 
 :::cli
 Stop that program and run `flock restart`.
-:::
-
-## Coming from Lerd
-
-If you used Lerd before, import your parked folders, linked sites and default versions with:
-
-```bash
-flock import lerd
-```
-
-:::app
-The import is only available from the CLI. Run it once in a terminal, and the imported sites show up in the app.
 :::

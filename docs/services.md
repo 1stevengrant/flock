@@ -1,17 +1,17 @@
 # Databases & services
 
-Flock installs databases, caches, search engines and object storage as native processes. They start in the background with Flock and shut down cleanly. Every download is verified against its checksum.
+Flock installs databases, caches, search engines and object storage as native processes. They start in the background with Flock and shut down cleanly. Every build is downloaded from Flock's signed package list and checked before it is installed — nothing is compiled on your machine.
 
 ## Available services
 
 | Service | Category | Port | Versions |
 | --- | --- | --- | --- |
 | PostgreSQL | Database | 5432 | 18, 17, 16, 15, 14 |
-| MySQL | Database | 3306 | 9.7 LTS, 8.4 LTS, 8.0 |
+| MySQL | Database | 3306 | 9.7, 8.4, 8.0 |
 | MariaDB | Database | 3306 | 12.3, 11.8, 11.4, 10.11 |
 | MongoDB | Database | 27017 | 9.0, 8.0, 7.0 |
-| Redis | Cache & queue | 6379 | 8.10, 8.4, 7.4, 7.2 (macOS only) |
-| Valkey | Cache & queue | 6379 | newest (macOS only) |
+| Valkey | Cache & queue | 6379 | 9.1 |
+| Redis | Cache & queue | 6379 | 8.10, 8.4, 7.4, 7.2 (macOS only; on Windows use Valkey) |
 | Meilisearch | Search | 7700 | 1.x |
 | Typesense | Search | 8108 | 30, 29 (macOS only) |
 | RustFS | Storage | 9000 | 1.x |
@@ -22,8 +22,10 @@ PostgreSQL has its own section. See [PostgreSQL](postgres.md).
 
 Without a version, Flock installs the newest one. A different port lets two services that normally share one run side by side, for example MySQL and MariaDB: when you install MariaDB while MySQL already uses 3306, Flock suggests 3307. Uninstalling keeps your data unless you ask for it to be deleted.
 
+Installing another version of a service you already have doesn't switch to it: the current one keeps running until you switch. When you uninstall the active version, the newest other installed version takes over.
+
 :::app
-Open **Settings…** from the Flock panel and go to **Services**. Switch the filter from **Installed** to **All** to see every service, and select one. Pick a **Version** and **Port**, then click **Install**.
+Open **Settings…** from the Flock panel and go to **Services**. Switch the filter from **Installed** to **All** to see every service, and select one. Pick a **Version** and **Port**, then click the install button, for example **Install MySQL 8.4.x** (it shows the exact release).
 
 ![Installing a service in Settings → Services](screenshot:settings-services-install)
 
@@ -32,18 +34,25 @@ Once a service is installed:
 - **Start** and **Stop** it from its row.
 - **Switch…** to another version, or **Update to …** the installed one, from its detail.
 - Change its port with **Change…** next to **Port** in the detail (macOS), or the **Port…** button on its row (Windows).
-- Remove it with **Uninstall…** in the **⋯** menu. macOS asks whether to keep the data; on Windows, tick **Also delete its data** to remove it.
+- Remove it from the **⋯** menu: **Uninstall MySQL 8.4…** on macOS, which asks whether to keep the data (**Uninstall, Keep Data** or **Uninstall and Delete Data**), or **Uninstall…** on Windows, where you tick **Also delete its data** to remove it.
 :::
 
 :::cli
 ```bash
 flock services                         # list services and their state
+flock services install postgres
 flock services install mysql 8.4
-flock services install redis 7.4
+flock services install valkey
 flock services install mariadb 11.8 --port 3307
+flock services update mysql
+flock services use mysql 8.0           # switch to another installed version
+flock services list mysql              # versions, updates and data sizes
+flock services create-db mysql acme
 flock services uninstall mysql
 flock services uninstall mysql --delete-data
 ```
+
+`create-db` works for PostgreSQL, MySQL and MariaDB while the service is running. `--port` doesn't apply to PostgreSQL.
 :::
 
 ## Connecting from Laravel
@@ -93,13 +102,13 @@ MONGODB_DATABASE=laravel
 ### Redis / Valkey
 
 ```bash
-REDIS_CLIENT=phpredis   # use predis on Windows
+REDIS_CLIENT=phpredis
 REDIS_HOST=127.0.0.1
 REDIS_PASSWORD=null
 REDIS_PORT=6379
 ```
 
-`redis-cli` (and `valkey-cli` on macOS) is on your PATH.
+`redis-cli` and `valkey-cli` are on your PATH. `redis-cli` talks to Redis when it is installed, else to Valkey. When neither is installed, it offers to install Valkey and start it.
 
 ### Meilisearch
 
@@ -136,16 +145,6 @@ AWS_URL=http://127.0.0.1:9000/laravel
 AWS_USE_PATH_STYLE_ENDPOINT=true
 ```
 
-## Valkey on macOS
+## Valkey or Redis?
 
-On macOS you can build the newest Valkey from source and run it on `127.0.0.1:6379`.
-
-:::app
-In **Settings → Services**, select **Valkey** and click **Install Valkey**.
-:::
-
-:::cli
-```bash
-flock valkey install
-```
-:::
+Valkey is the open-source Redis: the same commands, and Laravel's Redis settings work with it unchanged. Flock offers it on macOS and Windows. Redis itself is available on macOS only.

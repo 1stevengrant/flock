@@ -36,7 +36,8 @@
       { "slug": "mail", "title": "Mail" },
       { "slug": "dumps", "title": "Dumps" },
       { "slug": "xdebug", "title": "Xdebug" },
-      { "slug": "logs", "title": "Logs" }
+      { "slug": "logs", "title": "Logs" },
+      { "slug": "ai", "title": "AI agents" }
     ]
   },
   {

@@ -17,7 +17,7 @@ For Node, `.nvmrc` and `.node-version` also count as pinned. A `node=` line in `
 The PHP version goes into a `.flockrc` file in the project root. The Node version goes into the file the project already uses for Node (`.flockrc`, `.node-version` or `.nvmrc`). If there isn't one, Flock creates an `.nvmrc`, which other Node tools read too.
 
 :::app
-In **Settings → Sites**, click the pin icon in the site's row (macOS) or open its **…** menu (Windows), and choose **Pin PHP 8.5 to Project…** or **Pin Node 22 to Project…**. This pins the version the site uses right now. To remove a pin, choose **Unpin PHP (.flockrc)…** or **Unpin Node (.nvmrc)…** from the same menu.
+In **Settings → Sites**, select the site, then click the pin icon (macOS) or open the **…** menu (Windows), and choose **Pin PHP 8.5 to Project…** or **Pin Node 22 to Project…**. This pins the version the site uses right now. To remove a pin, choose **Unpin PHP (.flockrc)…** or **Unpin Node (.nvmrc)…** from the same menu.
 
 ![Pinning versions in Settings → Sites](screenshot:settings-sites-pin)
 :::
@@ -52,7 +52,7 @@ node=22
 Isolation overrides the pinned version for this site, but only on your machine, and nothing is written into the project. It's useful for trying a project on a newer version before you pin it.
 
 :::app
-In **Settings → Sites**, pick a version from the site's PHP or Node menu. To follow the project again, pick the first entry, **Use .flockrc** (or **Default** when the project pins nothing). When an isolated version differs from the project's pin, the row shows a hint with a **Use .flockrc** or **Use .nvmrc** link that does the same.
+In **Settings → Sites**, select the site and pick a version from its PHP or Node menu under **Versions**. To follow the project again, pick the first entry, **Use .flockrc** (or **Default** when the project pins nothing). When an isolated version differs from the project's pin, the site's details show a hint with a **Use .flockrc** or **Use .nvmrc** link that does the same.
 :::
 
 :::cli
@@ -67,7 +67,7 @@ Undo it with `flock unisolate php`.
 ## Seeing what's used where
 
 :::app
-**Settings → Sites** shows every site's PHP and Node version. Hover over a version to see where it comes from.
+In **Settings → Sites**, the selected site's details show its PHP and Node versions. Hover over a version to see where it comes from.
 :::
 
 :::cli

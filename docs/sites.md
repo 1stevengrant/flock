@@ -38,7 +38,7 @@ flock unpark ~/Work
 A linked site is a single project folder, wherever it lives. The site name defaults to the folder name.
 
 :::app
-In **Settings → Sites**, click **Add Site…** and choose the project folder. Set its PHP version and HTTPS in its row afterwards.
+In **Settings → Sites**, click **Add Site…** and choose the project folder. Then select the site to set its HTTPS in the **Site** section and its PHP version under **Versions**.
 
 ![Settings → Sites](screenshot:settings-sites)
 
@@ -71,7 +71,7 @@ Remove a link with `flock unlink [name]`.
 ## Listing sites
 
 :::app
-**Settings → Sites** lists every linked and parked site with its PHP and Node version and HTTPS state. Sites from a project folder carry a **Project folder** badge. The **Sites** section of the Flock panel lists them too: click one to open it in your browser.
+**Settings → Sites** lists every linked and parked site with its domain and a lock when it's secured. Select one to see its PHP and Node versions, domains and server. Sites from a project folder carry a **Project folder** badge. The **Sites** section of the Flock panel lists them too: click one to open it in your browser.
 :::
 
 :::cli
