@@ -1,0 +1,4 @@
+# Labels for pull requests by the files they change; .github/workflows/labeler.yml applies them.
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: docs/**

@@ -15,3 +15,14 @@ To make sure work goes into changes that fit the project, every pull request sta
 
 Pull requests that don't reference an approved issue are closed automatically, with a note
 explaining why. Once the issue is approved, you're welcome to open a new one.
+
+## Documentation
+
+The documentation at [flockphp.com/docs](https://flockphp.com/docs/quick-start) lives in
+[`docs/`](docs). A pull request that changes only files in `docs/`, such as a typo fix or a
+clearer explanation, needs no issue: use **Edit this page on GitHub** at the bottom of a page, or
+open a pull request against `develop` directly. If it later changes files outside `docs/` too, it
+needs an approved issue like any other.
+
+The website shows the documentation of released versions only, so a change appears there with the
+next release. A pull request that adds or changes a feature should update its documentation too.
