@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"flock/internal/binaries"
@@ -33,13 +34,17 @@ import (
 // working day it was made for.
 const Lifetime = 8 * time.Hour
 
-// startTimeout is how long cloudflared gets to report its address.
-var startTimeout = 90 * time.Second
+// startTimeout is how long cloudflared gets to report its address, and connectTimeout how long
+// it then gets to connect to Cloudflare: until it does, visitors get Cloudflare's error 1033.
+var (
+	startTimeout   = 90 * time.Second
+	connectTimeout = 30 * time.Second
+)
 
 // States of a share.
 const (
 	Building = "building" // building the assets (npm run build)
-	Starting = "starting" // downloading cloudflared or waiting for the tunnel's address
+	Starting = "starting" // downloading cloudflared, or waiting for the tunnel's address and connection
 	Running  = "running"
 	Failed   = "failed" // see Error; the share stays listed until it is stopped or started again
 )
@@ -392,6 +397,8 @@ func (m *Manager) tunnel(ctx context.Context, s *share, bin string, port int, lo
 	defer os.Remove(m.pidFile(s.Site))
 
 	found := make(chan string, 1)
+	connected := make(chan struct{})
+	var blocked atomic.Bool
 	last := make(chan string, 1)
 	go func() {
 		lastLine := ""
@@ -405,6 +412,16 @@ func (m *Manager) tunnel(ctx context.Context, s *share, bin string, port int, lo
 				case found <- u:
 				default:
 				}
+			}
+			switch {
+			case registered.MatchString(line):
+				select {
+				case <-connected:
+				default:
+					close(connected)
+				}
+			case precheckFailed.MatchString(line):
+				blocked.Store(true)
 			}
 			if msg := strings.TrimSpace(line); msg != "" && !strings.Contains(msg, "+---") && !strings.Contains(msg, "|") {
 				lastLine = msg
@@ -423,12 +440,9 @@ func (m *Manager) tunnel(ctx context.Context, s *share, bin string, port int, lo
 		<-exited
 	}
 
+	var u string
 	select {
-	case u := <-found:
-		qr, _ := QRPNG(u, 8)
-		expires := time.Now().UTC().Add(Lifetime)
-		m.update(s, func(s *share) { s.State, s.URL, s.QR, s.ExpiresAt, s.Error = Running, u, qr, &expires, "" })
-		fmt.Fprintf(log, "[flock] shared at %s until %s\n", u, expires.Local().Format(time.Kitchen))
+	case u = <-found:
 	case <-time.After(startTimeout):
 		stop()
 		m.fail(s, fmt.Sprintf("cloudflared didn't report the tunnel's address — see `flock logs %s`", s.Log))
@@ -440,6 +454,25 @@ func (m *Manager) tunnel(ctx context.Context, s *share, bin string, port int, lo
 		m.fail(s, fmt.Sprintf("cloudflared exited (%v) — see `flock logs %s`", err, s.Log))
 		return
 	}
+
+	// The address exists before the tunnel does: it is only shown once cloudflared has connected.
+	select {
+	case <-connected:
+	case <-time.After(connectTimeout):
+		stop()
+		m.fail(s, connectError(blocked.Load(), s.Log))
+		return
+	case <-ctx.Done():
+		stop()
+		return
+	case err := <-exited:
+		m.fail(s, fmt.Sprintf("cloudflared exited (%v) — see `flock logs %s`", err, s.Log))
+		return
+	}
+	qr, _ := QRPNG(u, 8)
+	expires := time.Now().UTC().Add(Lifetime)
+	m.update(s, func(s *share) { s.State, s.URL, s.QR, s.ExpiresAt, s.Error = Running, u, qr, &expires, "" })
+	fmt.Fprintf(log, "[flock] shared at %s until %s\n", u, expires.Local().Format(time.Kitchen))
 
 	expire := time.NewTimer(Lifetime)
 	defer expire.Stop()
@@ -461,6 +494,23 @@ func (m *Manager) tunnel(ctx context.Context, s *share, bin string, port int, lo
 
 // tunnelURL is how cloudflared names a quick tunnel's address.
 var tunnelURL = regexp.MustCompile(`(https://[a-z0-9-]+\.trycloudflare\.com)(?:[^a-zA-Z0-9.-]|$)`)
+
+// registered is cloudflared connecting to Cloudflare's edge; precheckFailed its check of the
+// network at start finding the edge unreachable (outbound port 7844 blocked, UDP and TCP).
+var (
+	registered     = regexp.MustCompile(`\bRegistered tunnel connection\b`)
+	precheckFailed = regexp.MustCompile(`\bprecheck complete\b.*\bhard_fail=true\b`)
+)
+
+// connectError says why a tunnel didn't connect: the network blocks it, when cloudflared's
+// precheck found so, or else some other reason the log may tell.
+func connectError(blocked bool, log string) string {
+	if blocked {
+		return fmt.Sprintf("this network blocks Cloudflare's tunnels (outbound port 7844, UDP and TCP) — "+
+			"try another network, or turn off the VPN or firewall in the way; see `flock logs %s`", log)
+	}
+	return fmt.Sprintf("cloudflared couldn't connect to Cloudflare — see `flock logs %s`", log)
+}
 
 func (m *Manager) fail(s *share, msg string) {
 	m.update(s, func(s *share) {
