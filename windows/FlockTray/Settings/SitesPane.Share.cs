@@ -3,6 +3,9 @@ using Flock.Kit;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 
 namespace Flock.Tray;
@@ -46,7 +49,7 @@ internal sealed partial class SitesPane
                 section.Children.Add(Ui.Row(4, link, copy));
                 if (share.Qr is { Length: > 0 } data)
                 {
-                    section.Children.Add(QrImage(data));
+                    section.Children.Add(QrImage(data, site.Name));
                 }
                 if (share.ExpiresAt is { } expires)
                 {
@@ -101,11 +104,40 @@ internal sealed partial class SitesPane
         await Perform(c => c.StartShareAsync(site.Name, allow));
     }
 
-    /// <summary>The share's QR code: the daemon's PNG (8 pixels per module), shown at 160 pixels.</summary>
-    private Image QrImage(string data)
+    /// <summary>
+    /// The share's QR code: the daemon's PNG (8 pixels per module), shown at 160 pixels. Its context
+    /// menu copies or saves it, and it drags out as a .png file.
+    /// </summary>
+    private Image QrImage(string data, string site)
     {
-        var image = new Image { Width = 160, Height = 160, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };
+        var image = new Image { Width = 160, Height = 160, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, CanDrag = true };
         Ui.AutomationName(image, "QR code of the share's address");
+        ToolTipService.SetToolTip(image, "Right-click to copy or save the QR code, or drag it out");
+        var copy = new MenuFlyoutItem { Text = "Copy image" };
+        copy.Click += (_, _) => _ = CopyQr(data);
+        var save = new MenuFlyoutItem { Text = "Save image…" };
+        save.Click += (_, _) => _ = SaveQr(data, site);
+        image.ContextFlyout = new MenuFlyout { Items = { copy, save } };
+        image.DragStarting += async (_, e) =>
+        {
+            var deferral = e.GetDeferral();
+            try
+            {
+                var path = Path.Combine(Path.GetTempPath(), QrFileName(site));
+                await File.WriteAllBytesAsync(path, Convert.FromBase64String(data));
+                e.Data.SetStorageItems([await StorageFile.GetFileFromPathAsync(path)]);
+                e.Data.RequestedOperation = DataPackageOperation.Copy;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+            {
+                App.Log(ex);
+                e.Cancel = true;
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
         if (qr is { } cached && cached.Data == data)
         {
             image.Source = cached.Image;
@@ -130,6 +162,48 @@ internal sealed partial class SitesPane
         catch (Exception e) when (e is FormatException or System.Runtime.InteropServices.COMException)
         {
             App.Log(e);
+        }
+    }
+
+    private static string QrFileName(string site) => $"{site}-share-qr.png";
+
+    /// <summary>Copies the share's QR code to the clipboard as an image.</summary>
+    private static async Task CopyQr(string data)
+    {
+        try
+        {
+            // The clipboard reads the stream when an app pastes, so it stays open.
+            var stream = new InMemoryRandomAccessStream();
+            await stream.WriteAsync(Convert.FromBase64String(data).AsBuffer());
+            stream.Seek(0);
+            var package = new DataPackage();
+            package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
+            Clipboard.SetContent(package);
+        }
+        catch (Exception e) when (e is FormatException or System.Runtime.InteropServices.COMException)
+        {
+            App.Log(e);
+        }
+    }
+
+    /// <summary>Asks where to save the share's QR code, then writes the PNG there.</summary>
+    private async Task SaveQr(string data, string site)
+    {
+        var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(QrFileName(site)) };
+        picker.FileTypeChoices.Add("PNG image", [".png"]);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Window.Hwnd);
+        var file = await picker.PickSaveFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+        try
+        {
+            await File.WriteAllBytesAsync(file.Path, Convert.FromBase64String(data));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
+        {
+            await Ui.Inform(Window.Content.XamlRoot, "Could not save the QR code", e.Message);
         }
     }
 }

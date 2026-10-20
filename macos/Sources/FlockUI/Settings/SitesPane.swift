@@ -1,6 +1,7 @@
 import AppKit
 import FlockKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The sites in a list, and the selected one's details beside it, as in Services: its address and
 /// domains, its PHP and Node.js versions and what serves it. Each version picker offers the
@@ -592,9 +593,15 @@ struct SitesPane: View {
             if let data = share.qrPNG, let image = NSImage(data: data) {
                 Image(nsImage: image)
                     .resizable()
-                    .interpolation(.none)
+                    .interpolation(.high)
                     .frame(width: 160, height: 160)
                     .accessibilityLabel("QR code of \(url)")
+                    .help("Right-click to copy or save the QR code, or drag it out")
+                    .contextMenu {
+                        Button("Copy Image") { copyQR(data, image) }
+                        Button("Save Image…") { saveQR(data, site: site.name) }
+                    }
+                    .onDrag { qrProvider(data, site: site.name) }
             }
             VStack(alignment: .leading, spacing: 2) {
                 if let expires = share.expiresAt {
@@ -626,6 +633,40 @@ struct SitesPane: View {
 
     private func startShare(_ site: String, allow: [String]) {
         Task { await model.settings.perform { _ = try await $0.startShare(site: site, allow: allow) } }
+    }
+
+    /// Copies the share's QR code as PNG, and as TIFF for apps that only paste that.
+    private func copyQR(_ data: Data, _ image: NSImage) {
+        let item = NSPasteboardItem()
+        item.setData(data, forType: .png)
+        if let tiff = image.tiffRepresentation {
+            item.setData(tiff, forType: .tiff)
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([item])
+    }
+
+    /// Asks where to save the share's QR code, then writes the PNG there.
+    private func saveQR(_ data: Data, site: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(site)-share-qr.png"
+        panel.allowedContentTypes = [.png]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try data.write(to: url)
+        } catch {
+            model.settings.error = error.localizedDescription
+        }
+    }
+
+    /// The QR code for dragging out: a .png file, so Finder, Mail and Slack all take it.
+    private func qrProvider(_ data: Data, site: String) -> NSItemProvider {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(site)-share-qr.png")
+        if (try? data.write(to: file)) != nil, let provider = NSItemProvider(contentsOf: file) {
+            return provider
+        }
+        return NSItemProvider(item: data as NSData, typeIdentifier: UTType.png.identifier)
     }
 
     /// The project uses Laravel Boost, and Flock's guideline is missing from it or outdated.
