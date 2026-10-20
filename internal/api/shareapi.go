@@ -16,8 +16,10 @@ import (
 type ShareStatus = share.Status
 
 // ShareRequest starts a share: Allow are the emails (or *@domain) let in, none for anyone with the URL.
+// Debug turns the app's debug mode on for visitors, whatever .env says.
 type ShareRequest struct {
 	Allow []string `json:"allow"`
+	Debug bool     `json:"debug,omitempty"`
 }
 
 func registerShares(mux *http.ServeMux, b Backend) {
@@ -60,7 +62,7 @@ func registerShares(mux *http.ServeMux, b Backend) {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid share request: %w", err))
 			return
 		}
-		if err := b.StartShare(site.Name, req.Allow); err != nil {
+		if err := b.StartShare(site.Name, req.Allow, req.Debug); err != nil {
 			code := http.StatusConflict
 			if errors.Is(err, share.ErrInvalid) {
 				code = http.StatusBadRequest
@@ -90,9 +92,9 @@ func registerShares(mux *http.ServeMux, b Backend) {
 }
 
 // StartShare shares a site; Share follows it from building to running.
-func (c *Client) StartShare(ctx context.Context, site string, allow []string) (ShareStatus, error) {
+func (c *Client) StartShare(ctx context.Context, site string, allow []string, debug bool) (ShareStatus, error) {
 	var st ShareStatus
-	err := c.send(ctx, http.MethodPost, "/v1/shares/"+url.PathEscape(site), ShareRequest{Allow: allow}, &st)
+	err := c.send(ctx, http.MethodPost, "/v1/shares/"+url.PathEscape(site), ShareRequest{Allow: allow, Debug: debug}, &st)
 	return st, err
 }
 

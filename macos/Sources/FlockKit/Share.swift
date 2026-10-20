@@ -8,6 +8,8 @@ public struct ShareStatus: Decodable, Sendable, Equatable {
     public var url: String?
     /// Emails (or *@domain) allowed in; empty: anyone with the URL.
     public var allow: [String]
+    /// Debug mode is on for visitors (stack traces), whatever .env says.
+    public var debug: Bool
     public var startedAt: Date?
     /// When the share stops by itself, once running.
     public var expiresAt: Date?
@@ -18,6 +20,8 @@ public struct ShareStatus: Decodable, Sendable, Equatable {
     public var rebuilding: Bool
     public var rebuildError: String?
     public var error: String?
+    /// What to know about how the share protects the app, e.g. that the cached config keeps debug mode on.
+    public var warning: String?
     /// The name of its service log.
     public var log: String
     /// The URL as a QR code: a base64 PNG.
@@ -42,7 +46,7 @@ public struct ShareStatus: Decodable, Sendable, Equatable {
     public var qrPNG: Data? { qr.flatMap { Data(base64Encoded: $0) } }
 
     enum CodingKeys: String, CodingKey {
-        case site, state, url, allow, startedAt, expiresAt, built, canRebuild, rebuilding, rebuildError, error, log, qr
+        case site, state, url, allow, debug, startedAt, expiresAt, built, canRebuild, rebuilding, rebuildError, error, warning, log, qr
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,6 +55,7 @@ public struct ShareStatus: Decodable, Sendable, Equatable {
         state = try c.decodeIfPresent(State.self, forKey: .state) ?? .unknown
         url = try c.decodeIfPresent(String.self, forKey: .url)
         allow = try c.decodeIfPresent([String].self, forKey: .allow) ?? []
+        debug = try c.decodeIfPresent(Bool.self, forKey: .debug) ?? false
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         built = try c.decodeIfPresent(Bool.self, forKey: .built) ?? false
@@ -58,6 +63,7 @@ public struct ShareStatus: Decodable, Sendable, Equatable {
         rebuilding = try c.decodeIfPresent(Bool.self, forKey: .rebuilding) ?? false
         rebuildError = try c.decodeIfPresent(String.self, forKey: .rebuildError)
         error = try c.decodeIfPresent(String.self, forKey: .error)
+        warning = try c.decodeIfPresent(String.self, forKey: .warning)
         log = try c.decodeIfPresent(String.self, forKey: .log) ?? ""
         qr = try c.decodeIfPresent(String.self, forKey: .qr)
     }

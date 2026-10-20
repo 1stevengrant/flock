@@ -212,9 +212,9 @@ type Backend interface {
 	// RestartSite restarts a FrankenPHP site's process, e.g. so Octane's workers load changed code.
 	RestartSite(name string) error
 	// Shares runs the sites' tunnels (nil when unavailable); StartShare starts one after checking
-	// that the site can be shared.
+	// that the site can be shared, with the app's debug mode on for visitors when debug is set.
 	Shares() *share.Manager
-	StartShare(site string, allow []string) error
+	StartShare(site string, allow []string, debug bool) error
 }
 
 // NewHandler builds the API routes. A non-empty token requires `Authorization: Bearer <token>`

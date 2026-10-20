@@ -56,7 +56,7 @@ This works with Laravel's Vite plugin and its default `public/build` folder. Wit
 
 Your local app is set up for development, so Flock locks a few things down for shared requests:
 
-- **Debug mode is off** for visitors: they get plain error pages, not stack traces, and Debugbar stays hidden. Your own browser keeps debug mode. When the app's config is cached (`php artisan config:cache`), Flock can't switch it off, so it refuses to share until you run `php artisan config:clear`.
+- **Debug mode is off** for visitors: they get plain error pages, not stack traces, and Debugbar stays hidden. Your own browser keeps debug mode. When the app's config is cached (`php artisan config:cache`), Flock can't switch it off: visitors get the app's own setting, and Flock warns you. Run `php artisan config:clear` and share again to turn it off for them. To show a bug to someone you trust, check **Show error details to visitors** when you share (`flock share --debug`): debug mode is then on for that share only, whatever `.env` says.
 - **Dev tools are blocked:** Telescope, Horizon, Pulse, Debugbar, Ignition, Clockwork, Log Viewer and Boost answer 404 at their default paths.
 - **Dotfiles are blocked**, such as `.env` or `.git`, in case one ended up in `public/`.
 - **Dumps don't appear in the page**, even when you show them there yourself. They're still captured in Flock.

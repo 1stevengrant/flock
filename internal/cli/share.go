@@ -22,7 +22,7 @@ import (
 
 func newShareCommand() *cobra.Command {
 	var allow []string
-	var stop bool
+	var stop, debug bool
 
 	cmd := &cobra.Command{
 		Use:   "share [name]",
@@ -31,8 +31,9 @@ func newShareCommand() *cobra.Command {
 			"It's for previews, never for production: the share ends when you press Ctrl+C, after 8 hours, or\n" +
 			"when Flock stops. Visitors get the built assets (Flock runs `npm run build` when they're out of\n" +
 			"date) and never debug pages, dumps, Telescope or the other dev tools.\n\n" +
-			"With --allow, Cloudflare asks visitors for a one-time code sent to an allowed address first.",
-		Example: "  flock share\n  flock share --allow colleague@acme.com --allow '*@client.com'",
+			"With --allow, Cloudflare asks visitors for a one-time code sent to an allowed address first.\n" +
+			"With --debug, visitors get the app's error pages with stack traces, for showing a bug to someone you trust.",
+		Example: "  flock share\n  flock share --allow colleague@acme.com --allow '*@client.com'\n  flock share --debug --allow colleague@acme.com",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := load()
@@ -61,7 +62,7 @@ func newShareCommand() *cobra.Command {
 			signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 			defer signal.Stop(signals)
 
-			if _, err := client.StartShare(ctx, site.Name, allow); err != nil {
+			if _, err := client.StartShare(ctx, site.Name, allow, debug); err != nil {
 				return err
 			}
 			return followShare(ctx, client, site.Name, out, signals)
@@ -70,6 +71,7 @@ func newShareCommand() *cobra.Command {
 
 	cmd.Flags().StringArrayVar(&allow, "allow", nil, "only let in this email address, or everyone at a domain with *@domain (repeatable)")
 	cmd.Flags().BoolVar(&stop, "stop", false, "stop sharing the site (e.g. a share started in the app)")
+	cmd.Flags().BoolVar(&debug, "debug", false, "turn the app's debug mode on for visitors: they see stack traces")
 	return cmd
 }
 
@@ -166,6 +168,12 @@ func showShare(out io.Writer, st api.ShareStatus) {
 	fmt.Fprintf(out, "\nsharing %s\n\n  %s%s\n", st.Site, st.URL, copied)
 	if len(st.Allow) > 0 {
 		fmt.Fprintf(out, "  only for %s (Cloudflare emails them a code)\n", strings.Join(st.Allow, ", "))
+	}
+	if st.Debug {
+		fmt.Fprintln(out, "  debug mode is on: visitors see stack traces")
+	}
+	if st.Warning != "" {
+		fmt.Fprintf(out, "\nwarning: %s\n", st.Warning)
 	}
 	if qr, err := share.QRText(st.URL); err == nil && term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Fprintf(out, "\n%s", qr)

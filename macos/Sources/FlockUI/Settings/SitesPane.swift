@@ -101,10 +101,10 @@ struct SitesPane: View {
             SiteExtensionsSheet(site: site)
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
-            ShareSheet(site: sharing ?? "") { allow in
+            ShareSheet(site: sharing ?? "") { allow, debug in
                 let name = sharing ?? ""
                 sharing = nil
-                startShare(name, allow: allow)
+                startShare(name, allow: allow, debug: debug)
             } cancel: {
                 sharing = nil
             }
@@ -555,7 +555,7 @@ struct SitesPane: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        Button("Try Again") { startShare(site.name, allow: share.allow) }
+                        Button("Try Again") { startShare(site.name, allow: share.allow, debug: share.debug) }
                         Button("Dismiss") { stop() }
                     }
                 }
@@ -610,8 +610,17 @@ struct SitesPane: View {
                 if !share.allow.isEmpty {
                     Text("Only for: \(share.allow.joined(separator: ", "))")
                 }
+                if share.debug {
+                    Text("Debug mode is on: visitors see stack traces")
+                }
             }
             .font(.caption).foregroundStyle(.secondary)
+            if let warning = share.warning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let error = share.rebuildError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
@@ -631,8 +640,8 @@ struct SitesPane: View {
         }
     }
 
-    private func startShare(_ site: String, allow: [String]) {
-        Task { await model.settings.perform { _ = try await $0.startShare(site: site, allow: allow) } }
+    private func startShare(_ site: String, allow: [String], debug: Bool) {
+        Task { await model.settings.perform { _ = try await $0.startShare(site: site, allow: allow, debug: debug) } }
     }
 
     /// Copies the share's QR code as PNG, and as TIFF for apps that only paste that.
@@ -757,12 +766,14 @@ private struct ConfirmAction: Identifiable, Sendable {
     var id: String { title }
 }
 
-/// Asks who may open a share before it starts: anyone with the link, or only the emails listed.
+/// Asks who may open a share before it starts (anyone with the link, or only the emails listed) and
+/// whether visitors see the app's debug mode.
 private struct ShareSheet: View {
     let site: String
-    let share: ([String]) -> Void
+    let share: ([String], Bool) -> Void
     let cancel: () -> Void
     private let allowState = State<String>(initialValue: "")
+    private let debugState = State<Bool>(initialValue: false)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -775,11 +786,17 @@ private struct ShareSheet: View {
             Text("Anyone with the link can open the site unless you list email addresses — Cloudflare then emails them a code. The link stops working after 8 hours or when you stop sharing.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Show error details to visitors", isOn: debugState.projectedValue)
+                Text("Turns the app's debug mode on for this share, so visitors see stack traces. Only for people you trust.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { cancel() }
                     .keyboardShortcut(.cancelAction)
-                Button("Share") { share(ShareStatus.parseAllow(allowState.wrappedValue)) }
+                Button("Share") { share(ShareStatus.parseAllow(allowState.wrappedValue), debugState.wrappedValue) }
                     .keyboardShortcut(.defaultAction)
             }
         }

@@ -59,6 +59,14 @@ internal sealed partial class SitesPane
                 {
                     section.Children.Add(Ui.Caption($"Only for: {string.Join(", ", share.Allow)}"));
                 }
+                if (share.Debug)
+                {
+                    section.Children.Add(Ui.Caption("Debug mode is on: visitors see stack traces"));
+                }
+                if (share.Warning is { } warning)
+                {
+                    section.Children.Add(Warning(warning));
+                }
                 if (share.RebuildError is { } rebuildError)
                 {
                     section.Children.Add(Warning(rebuildError));
@@ -77,20 +85,26 @@ internal sealed partial class SitesPane
             default:
                 section.Children.Add(Warning(share.Error ?? "The share stopped."));
                 var allow = share.Allow.ToList();
-                section.Children.Add(Ui.Row(8, Ui.Button("Try again", () => _ = Perform(c => c.StartShareAsync(site.Name, allow))), stop));
+                var debug = share.Debug;
+                section.Children.Add(Ui.Row(8, Ui.Button("Try again", () => _ = Perform(c => c.StartShareAsync(site.Name, allow, debug))), stop));
                 break;
         }
         return section;
     }
 
-    /// <summary>Asks who may open the shared site (nobody listed: anyone with the link), then shares it.</summary>
+    /// <summary>
+    /// Asks who may open the shared site (nobody listed: anyone with the link) and whether visitors see
+    /// the app's debug mode, then shares it.
+    /// </summary>
     private async Task StartShare(Status.Site site)
     {
         var box = new TextBox { PlaceholderText = "colleague@acme.com, *@client.com", Header = "Only these people (optional)" };
+        var debug = new CheckBox { Content = "Show error details to visitors" };
         var dialog = new ContentDialog
         {
             Title = $"Share {site.Name}",
-            Content = Ui.Column(12, box, Ui.Caption("Anyone with the link can open the site unless you list email addresses — Cloudflare then emails them a code. The link stops working after 8 hours or when you stop sharing.")),
+            Content = Ui.Column(12, box, Ui.Caption("Anyone with the link can open the site unless you list email addresses — Cloudflare then emails them a code. The link stops working after 8 hours or when you stop sharing."),
+                Ui.Column(2, debug, Ui.Caption("Turns the app's debug mode on for this share, so visitors see stack traces. Only for people you trust."))),
             PrimaryButtonText = "Share",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -101,7 +115,8 @@ internal sealed partial class SitesPane
             return;
         }
         var allow = box.Text.Split([',', ' ', ';', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        await Perform(c => c.StartShareAsync(site.Name, allow));
+        var withDebug = debug.IsChecked == true;
+        await Perform(c => c.StartShareAsync(site.Name, allow, withDebug));
     }
 
     /// <summary>

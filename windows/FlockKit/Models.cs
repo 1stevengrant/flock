@@ -256,6 +256,8 @@ public sealed class Status
         public string? Url { get; init; }
         /// <summary>Emails (or *@domain) let in; empty: anyone with the URL.</summary>
         public List<string> Allow { get; init; } = [];
+        /// <summary>Debug mode is on for visitors (stack traces), whatever .env says.</summary>
+        public bool Debug { get; init; }
         public DateTimeOffset StartedAt { get; init; }
         /// <summary>Set once running: the share ends then.</summary>
         public DateTimeOffset? ExpiresAt { get; init; }
@@ -266,6 +268,8 @@ public sealed class Status
         public bool Rebuilding { get; init; }
         public string? RebuildError { get; init; }
         public string? Error { get; init; }
+        /// <summary>What to know about how the share protects the app, e.g. that the cached config keeps debug mode on.</summary>
+        public string? Warning { get; init; }
         /// <summary>Name for /v1/logs/services/{name}.</summary>
         public string Log { get; init; } = "";
         /// <summary>The URL as a QR code: a base64 PNG.</summary>

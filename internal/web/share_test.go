@@ -251,7 +251,7 @@ func TestCaddyfileServesSharesOnLoopbackWithTheirOwnSettings(t *testing.T) {
 	block := file[strings.Index(file, "http://:41234"):]
 	for _, want := range []string{
 		"bind 127.0.0.1", "import flock_site", "request_header -Forwarded", `header_up X-Forwarded-Proto "https"`, "flock_share * \"/srv/app/public\"",
-		`env APP_DEBUG "false"`, `env HTTPS "on"`, `env REMOTE_ADDR "{http.request.header.CF-Connecting-IP}"`, "hide .*",
+		`env APP_DEBUG "false"`, `env DEBUGBAR_ENABLED "false"`, `env HTTPS "on"`, `env REMOTE_ADDR "{http.request.header.CF-Connecting-IP}"`, "hide .*",
 		`X-Robots-Tag "noindex, nofollow"`,
 	} {
 		if !strings.Contains(block, want) {
@@ -272,5 +272,21 @@ func TestCaddyfileServesSharesOnLoopbackWithTheirOwnSettings(t *testing.T) {
 	enc, share, fcgi := strings.Index(s, `"handler":"encode"`), strings.Index(s, `"handler":"flock_share"`), strings.LastIndex(s, `"transport":{"env"`)
 	if enc < 0 || share < 0 || fcgi < 0 || !(enc < share && share < fcgi) {
 		t.Fatalf("handler order: encode %d, flock_share %d, fastcgi %d", enc, share, fcgi)
+	}
+}
+
+func TestCaddyfileTurnsDebugModeOnWhenAShareAsksForIt(t *testing.T) {
+	cfg := Config{
+		StorageDir: "/tmp/caddy", LogFile: "/tmp/web.log", HTTPPort: 80, HTTPSPort: 443,
+		Shares: []Share{{Port: 41234, Root: "/srv/app/public", Public: "/srv/app/public", FPM: []string{"unix//tmp/php.sock"}, Debug: true}},
+	}
+	block := Caddyfile(cfg)
+	block = block[strings.Index(block, "http://:41234"):]
+	if !strings.Contains(block, `env APP_DEBUG "true"`) || strings.Contains(block, `env APP_DEBUG "false"`) {
+		t.Errorf("a debug share doesn't turn debug mode on:\n%s", block)
+	}
+	// The dev tools stay blocked, so Debugbar's toolbar would only break the page.
+	if !strings.Contains(block, `env DEBUGBAR_ENABLED "false"`) {
+		t.Errorf("a debug share turns Debugbar on:\n%s", block)
 	}
 }

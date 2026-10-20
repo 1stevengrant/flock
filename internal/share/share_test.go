@@ -162,3 +162,14 @@ func TestStartRefusesASecondShareWithOtherSettings(t *testing.T) {
 		t.Fatalf("another share: %v", err)
 	}
 }
+
+func TestStartRefusesTheSameShareWithAnotherDebugMode(t *testing.T) {
+	m := &Manager{root: t.TempDir(), shares: map[string]*share{}}
+	m.shares["app"] = &share{Status: Status{Site: "app", State: Running, Debug: true}}
+	if err := m.Start(Request{Site: "app", Debug: true}); err != nil {
+		t.Fatalf("the same share again: %v", err)
+	}
+	if err := m.Start(Request{Site: "app"}); !errors.Is(err, ErrShared) {
+		t.Fatalf("without debug mode: %v", err)
+	}
+}

@@ -20,7 +20,7 @@ func (d *daemon) Shares() *share.Manager { return d.shares }
 
 // StartShare implements api.Backend: it checks that the site can be shared safely, then starts the
 // share, building the assets first when they need it.
-func (d *daemon) StartShare(name string, allow []string) error {
+func (d *daemon) StartShare(name string, allow []string, debug bool) error {
 	d.mu.Lock()
 	cfg, sites := d.cfg, d.sites
 	d.mu.Unlock()
@@ -36,11 +36,10 @@ func (d *daemon) StartShare(name string, allow []string) error {
 			return fmt.Errorf("%s isn't served: %s", name, s.Problem)
 		}
 	}
-	if share.ConfigCached(site.Path) {
-		return fmt.Errorf("%s has its config cached, so Flock can't turn debug mode off for visitors — run `php artisan config:clear` first", name)
+	req := share.Request{Site: name, Allow: allow, Debug: debug}
+	if !debug && share.ConfigCached(site.Path) {
+		req.Warning = "The app's config is cached, so visitors get its own debug setting (APP_DEBUG). Run `php artisan config:clear` and share again to turn debug mode off for them."
 	}
-
-	req := share.Request{Site: name, Allow: allow}
 	if share.UsesVite(site.Path) {
 		req.BuildFirst = share.Stale(site.Path)
 		// The project's build scripts are its own code: they never run with root's rights.

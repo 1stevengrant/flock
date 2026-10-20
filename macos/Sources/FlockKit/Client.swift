@@ -161,8 +161,9 @@ public actor FlockClient {
 
     /// Shares a site at a temporary public URL; allow limits it to these emails (or *@domain).
     /// It returns at once: the share's progress shows on the site in `status()`.
-    public func startShare(site: String, allow: [String]) async throws -> ShareStatus {
-        try await decode(ShareStatus.self, "POST", "/v1/shares/\(escape(site))", body: try JSONEncoder().encode(["allow": allow]))
+    public func startShare(site: String, allow: [String], debug: Bool = false) async throws -> ShareStatus {
+        struct Request: Encodable { let allow: [String]; let debug: Bool }
+        return try await decode(ShareStatus.self, "POST", "/v1/shares/\(escape(site))", body: try JSONEncoder().encode(Request(allow: allow, debug: debug)))
     }
 
     /// Builds a running share's assets again, so visitors see the latest changes when they reload.

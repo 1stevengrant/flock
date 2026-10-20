@@ -55,6 +55,7 @@ type Status struct {
 	State     string     `json:"state"`
 	URL       string     `json:"url,omitempty"`
 	Allow     []string   `json:"allow"` // emails (or *@domain) allowed in; empty: anyone with the URL
+	Debug     bool       `json:"debug"` // debug mode is on for visitors (stack traces), whatever .env says
 	StartedAt time.Time  `json:"started_at"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"` // set once running
 	Built     bool       `json:"built"`                // the assets were built for the share
@@ -64,14 +65,19 @@ type Status struct {
 	Rebuilding   bool   `json:"rebuilding"`
 	RebuildError string `json:"rebuild_error,omitempty"`
 	Error        string `json:"error,omitempty"`
-	Log          string `json:"log"`          // name for /v1/logs/services/{name}
-	QR           string `json:"qr,omitempty"` // the URL as a QR code: a base64 PNG
+	// Warning is what the user should know about how the share protects the app, e.g. that the
+	// cached config keeps debug mode as the app has it.
+	Warning string `json:"warning,omitempty"`
+	Log     string `json:"log"`          // name for /v1/logs/services/{name}
+	QR      string `json:"qr,omitempty"` // the URL as a QR code: a base64 PNG
 }
 
 // Request starts a share.
 type Request struct {
-	Site  string
-	Allow []string
+	Site    string
+	Allow   []string
+	Debug   bool   // turn the app's debug mode on for visitors
+	Warning string // see Status.Warning
 	// Build builds the assets, writing its output to log; nil for projects without a build Flock
 	// runs. BuildFirst builds them before sharing (they are missing or out of date).
 	Build      func(ctx context.Context, log io.Writer) error
@@ -80,8 +86,9 @@ type Request struct {
 
 // Serving is a share the web server must serve on Port.
 type Serving struct {
-	Site string
-	Port int
+	Site  string
+	Port  int
+	Debug bool // see Request.Debug
 }
 
 // Errors of Start; the API maps them to HTTP status codes.
@@ -163,7 +170,7 @@ func (m *Manager) Start(req Request) error {
 	m.mu.Lock()
 	if old, ok := m.shares[req.Site]; ok {
 		if old.State != Failed {
-			same := slices.Equal(old.Allow, allow)
+			same := slices.Equal(old.Allow, allow) && old.Debug == req.Debug
 			m.mu.Unlock()
 			if same {
 				return nil
@@ -174,7 +181,7 @@ func (m *Manager) Start(req Request) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &share{
-		Status: Status{Site: req.Site, State: Starting, Allow: allow, StartedAt: time.Now().UTC(), Log: LogName(req.Site)},
+		Status: Status{Site: req.Site, State: Starting, Allow: allow, Debug: req.Debug, Warning: req.Warning, StartedAt: time.Now().UTC(), Log: LogName(req.Site)},
 		ctx:    ctx, cancel: cancel, done: make(chan struct{}),
 	}
 	s.build, s.CanRebuild = req.Build, req.Build != nil
@@ -293,7 +300,7 @@ func (m *Manager) Serving() []Serving {
 	var out []Serving
 	for _, s := range m.shares {
 		if s.port != 0 {
-			out = append(out, Serving{Site: s.Site, Port: s.port})
+			out = append(out, Serving{Site: s.Site, Port: s.port, Debug: s.Debug})
 		}
 	}
 	slices.SortFunc(out, func(a, b Serving) int { return strings.Compare(a.Site, b.Site) })

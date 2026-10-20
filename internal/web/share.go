@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/caddyserver/caddy/v2"
@@ -26,13 +27,16 @@ type Share struct {
 	// otherwise start a debugging session in, and never FrankenPHP's, which can't take the
 	// per-request settings below.
 	FPM []string
+	// Debug turns the app's debug mode on for visitors (APP_DEBUG=true), whatever .env says.
+	Debug bool
 }
 
 // shareBlock serves a share. Requests come from cloudflared on loopback, so:
 //   - forwarded headers a visitor sent are dropped and set from what Cloudflare's edge vouches for
 //     (CF-Connecting-IP), so an app that trusts proxies can't be fed another host or scheme;
 //   - PHP sees HTTPS, the visitor's address and APP_DEBUG=false (FastCGI params win over .env),
-//     so errors don't show stack traces or environment details, and Debugbar stays off;
+//     so errors don't show stack traces or environment details; a share that asks for debug mode
+//     gets APP_DEBUG=true instead. Debugbar stays off either way (its routes are blocked below);
 //   - flock_share blocks dotfiles, public/hot and the dev tools' routes, and swaps the Vite dev
 //     server's tags for the build (see sharerewrite.go);
 //   - search engines are asked not to index it, and links out don't send the tunnel's URL along.
@@ -52,15 +56,17 @@ func shareBlock(s Share) string {
 		quoted[i] = quote(u)
 	}
 	b.WriteString("\tphp_fastcgi " + strings.Join(quoted, " ") + " {\n")
-	for _, env := range [][2]string{
+	envs := [][2]string{
 		{"HTTPS", "on"},
 		{"REQUEST_SCHEME", "https"},
 		{"SERVER_PORT", "443"},
 		{"REMOTE_ADDR", "{http.request.header.CF-Connecting-IP}"},
 		{"REMOTE_HOST", "{http.request.header.CF-Connecting-IP}"},
-		{"APP_DEBUG", "false"},
+		{"APP_DEBUG", strconv.FormatBool(s.Debug)},
+		{"DEBUGBAR_ENABLED", "false"},
 		{"FLOCK_SHARED", "1"},
-	} {
+	}
+	for _, env := range envs {
 		fmt.Fprintf(&b, "\t\tenv %s %s\n", env[0], quote(env[1]))
 	}
 	// The proxy sets X-Forwarded-* from its own connection (cloudflared's, over plain HTTP);

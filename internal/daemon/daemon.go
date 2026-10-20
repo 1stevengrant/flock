@@ -678,7 +678,7 @@ func (d *daemon) reload() error {
 				return err
 			}
 			site, _ := cfg.FindSite(s.Site)
-			shares = append(shares, web.Share{Port: s.Port, Root: info.root, Public: filepath.Join(site.Path, "public"), FPM: upstreams})
+			shares = append(shares, web.Share{Port: s.Port, Root: info.root, Public: filepath.Join(site.Path, "public"), FPM: upstreams, Debug: s.Debug})
 		}
 	}
 

@@ -38,13 +38,13 @@ type fakeBackend struct {
 
 func (f *fakeBackend) PHP() *php.Manager { return f.php }
 
-func (f *fakeBackend) PostgresVersions() *postgres.Manager { return f.pg }
-func (f *fakeBackend) Catalog() *catalog.Manager           { return f.catalog }
-func (f *fakeBackend) FrankenPHP() *frankenphp.Manager     { return f.frankenphp }
-func (f *fakeBackend) Binaries() *binaries.Catalog         { return f.binaries }
-func (f *fakeBackend) RestartSite(string) error            { return nil }
-func (f *fakeBackend) Shares() *share.Manager              { return nil }
-func (f *fakeBackend) StartShare(string, []string) error   { return nil }
+func (f *fakeBackend) PostgresVersions() *postgres.Manager     { return f.pg }
+func (f *fakeBackend) Catalog() *catalog.Manager               { return f.catalog }
+func (f *fakeBackend) FrankenPHP() *frankenphp.Manager         { return f.frankenphp }
+func (f *fakeBackend) Binaries() *binaries.Catalog             { return f.binaries }
+func (f *fakeBackend) RestartSite(string) error                { return nil }
+func (f *fakeBackend) Shares() *share.Manager                  { return nil }
+func (f *fakeBackend) StartShare(string, []string, bool) error { return nil }
 
 func (f *fakeBackend) Status() Status      { return Status{Sites: f.sites} }
 func (f *fakeBackend) Reload() error       { return nil }
