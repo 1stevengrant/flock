@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"flock/internal/paths"
 	"flock/internal/supervisor"
 )
 
@@ -80,8 +81,8 @@ func sqlSpec(goos string, p Paths, port int, server, admin string, initialise fu
 	args := []string{"--no-defaults", "--basedir=" + p.Dir, "--datadir=" + p.Data,
 		"--bind-address=127.0.0.1", fmt.Sprintf("--port=%d", port)}
 	if goos != "windows" {
-		run := filepath.Join(p.Root, "run")
-		if err := os.MkdirAll(run, 0o700); err != nil {
+		run, err := paths.EnsureRun(p.Root)
+		if err != nil {
 			return supervisor.Spec{}, err
 		}
 		args = append(args, "--socket="+filepath.Join(run, server+".sock"))
