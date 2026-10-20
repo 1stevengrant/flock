@@ -32,7 +32,7 @@ This page lists the `flock` commands. The other pages show where to find each ac
 | `flock domain add <domain> [site]` | Add a subdomain or alias to a site |
 | `flock domain remove <domain> [site]` | Remove an extra domain (alias: `rm`) |
 | `flock domain list [site]` | List a site's extra domains (alias: `ls`) |
-| `flock share [name] [--allow <email>] [--debug]` | Share a site at a temporary public URL until you press Ctrl+C |
+| `flock share [name] [--allow <email>] [--debug]` | Share a site at a temporary public URL until you press <kbd>Ctrl</kbd>+<kbd>C</kbd> |
 | `flock share [name] --stop` | Stop sharing a site (e.g. one shared from the app) |
 
 ## PHP & Node.js

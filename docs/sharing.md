@@ -7,7 +7,7 @@ Sharing is for previews only, never for production. A share ends when you stop i
 ## Sharing a site
 
 :::app
-In **Settings → Sites**, select the site and click **Share…**. When the link is ready, copy it or let your colleague scan the QR code. Right-click the QR code to copy or save it, or drag it into a chat or email. **Stop sharing** ends it. Sites being shared are marked **Shared** in the Flock panel and the sites list.
+In **Settings → Sites**, select the site and click **Share…**. When the link is ready, copy it or let your colleague scan the QR code. Right-click the QR code to copy or save it, or drag it into a chat or email. To end the share, click **Stop sharing**. Sites being shared are marked **Shared** in the Flock panel and the sites list.
 :::
 
 :::cli
@@ -15,7 +15,7 @@ In **Settings → Sites**, select the site and click **Share…**. When the link
 flock share
 ```
 
-Run it inside the project folder, or name the site: `flock share acme`. Flock copies the URL to your clipboard and prints a QR code. The site stays shared until you press **Ctrl+C**.
+Run it inside the project folder, or name the site: `flock share acme`. Flock copies the URL to your clipboard and prints a QR code. The site stays shared until you press <kbd>Ctrl</kbd>+<kbd>C</kbd>.
 
 `flock status` lists every active share with its URL and when it ends. To stop a share you started in the app:
 
@@ -47,8 +47,8 @@ To change who's allowed, stop the share and start a new one.
 Visitors can't reach the Vite dev server, and Flock never exposes it: it can read files from your whole project. Instead, visitors get your production build from `public/build`:
 
 - When the build is missing or older than your sources, Flock runs `npm run build` before sharing.
-- You can keep `npm run dev` running. Your browser keeps hot reloading, and visitors get the built files.
-- After you change something, press **r** in the terminal (or **Rebuild assets** in the app), and visitors see the change when they reload.
+- You can keep `npm run dev` running, but hot reloading only works in your own browser. Visitors get the built files and see changes only after a rebuild.
+- After you change something, press <kbd>r</kbd> in the terminal (or **Rebuild assets** in the app), and visitors see the change when they reload.
 
 This works with Laravel's Vite plugin and its default `public/build` folder. With another setup, run your build yourself before sharing.
 
@@ -63,7 +63,7 @@ Your local app is set up for development, so Flock locks a few things down for s
 - **Xdebug isn't triggered** by visitors, even while you're debugging the site.
 - **Only the shared site is reachable**, never your other sites or Flock itself. Search engines are asked not to index it.
 
-Everything else in the app is public, just as if you had deployed it. If something shouldn't be seen, use **Only these people**.
+Everything else in the app is public, just as if you had deployed it. If something shouldn't be public, [limit the share to certain people](#only-letting-certain-people-in).
 
 > `request()->ip()` is the visitor's address, and `url()` builds `https://…trycloudflare.com` links. Mail and queued jobs still use `APP_URL` from `.env`.
 
