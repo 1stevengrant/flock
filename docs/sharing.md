@@ -7,7 +7,7 @@ Sharing is for previews only, never for production. A share ends when you stop i
 ## Sharing a site
 
 :::app
-In **Settings → Sites**, select the site and click **Share…**. When the link is ready, copy it or let your colleague scan the QR code. Right-click the QR code to copy or save it, or drag it into a chat or email. **Stop sharing** ends it. Sites being shared are marked in the Flock panel.
+In **Settings → Sites**, select the site and click **Share…**. When the link is ready, copy it or let your colleague scan the QR code. Right-click the QR code to copy or save it, or drag it into a chat or email. **Stop sharing** ends it. Sites being shared are marked **Shared** in the Flock panel and the sites list.
 :::
 
 :::cli

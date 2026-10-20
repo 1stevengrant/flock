@@ -162,7 +162,8 @@ struct SitesPane: View {
         return "Wildcard subdomains don't work here (\(dns?.wildcardProblem ?? "")), so add each subdomain you use (tenant1, a.b). A full name adds an alias."
     }
 
-    /// A site in the list: its name and address, a lock when it is secured, a warning when something is wrong.
+    /// A site in the list: its name and address, a lock when it is secured, a badge while it is shared, a
+    /// warning when something is wrong.
     private func siteRow(_ site: Status.Site) -> some View {
         HStack(spacing: 6) {
             VStack(alignment: .leading, spacing: 1) {
@@ -174,6 +175,10 @@ struct SitesPane: View {
             if let problem = problem(site) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
                     .help(problem)
+            }
+            if site.shared {
+                Badge(text: "Shared", color: .green)
+                    .help("Shared at \(site.share?.url ?? "")")
             }
             if site.secured {
                 Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary)
