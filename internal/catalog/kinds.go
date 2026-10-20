@@ -122,7 +122,9 @@ func mariadb(goos string) *Kind {
 				if goos == "windows" {
 					return run(filepath.Join(p.Dir, "bin", "mariadb-install-db.exe"), "--datadir="+p.Data)
 				}
-				return run(filepath.Join(p.Dir, "scripts", "mariadb-install-db"), "--no-defaults", "--basedir="+p.Dir,
+				// The script splits an unquoted --basedir at spaces ("Application Support"), so it
+				// runs from the package with a relative one.
+				return runIn(p.Dir, filepath.Join(p.Dir, "scripts", "mariadb-install-db"), "--no-defaults", "--basedir=.",
 					"--datadir="+p.Data, "--auth-root-authentication-method=normal", "--skip-test-db")
 			})
 		},
@@ -364,7 +366,14 @@ func removeMatching(dir, pattern string) error {
 
 // run runs a setup command (initialising a database), returning its output on failure.
 func run(path string, args ...string) error {
-	out, err := exec.Command(path, args...).CombinedOutput()
+	return runIn("", path, args...)
+}
+
+// runIn is run from the working directory dir.
+func runIn(dir, path string, args ...string) error {
+	cmd := exec.Command(path, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		tail := strings.TrimSpace(string(out))
 		if len(tail) > 2000 {
