@@ -468,8 +468,31 @@ public sealed class LogStore(FlockClient client) : Store
 }
 
 /// <summary>Configuration, services and PHP versions for the Settings window.</summary>
-public sealed class SettingsStore(FlockClient client) : Store
+public sealed class SettingsStore(FlockClient client)
 {
+    // Read failures have a stable display order; a successful read clears only its own entry.
+    private enum ReadSource
+    {
+        Config,
+        Services,
+        Php,
+        FrankenPhp,
+        Mcp,
+        Node,
+        Catalog,
+        Postgres
+    }
+
+    private readonly SortedDictionary<ReadSource, string> readErrors = [];
+    private string? actionError;
+
+    /// <summary>A failed action takes priority over read failures and survives refreshes.</summary>
+    public string? Error => actionError ?? readErrors.Values.FirstOrDefault();
+
+    public event Action? Changed;
+
+    private void Notify() => Changed?.Invoke();
+
     /// <summary>Lets the tray status catch up after a change.</summary>
     public Func<Task>? OnChange { get; init; }
 
@@ -482,40 +505,17 @@ public sealed class SettingsStore(FlockClient client) : Store
 
     public FlockClient Client => client;
 
-    public async Task RefreshAsync()
-    {
-        try
+    public Task RefreshAsync() => Task.WhenAll(
+        ReadAsync(ReadSource.Config, client.ConfigAsync, () => Config, fresh => Config = fresh),
+        ReadAsync(ReadSource.Services, client.ServicesAsync, () => Services, fresh =>
         {
-            var config = client.ConfigAsync();
-            var services = client.ServicesAsync();
-            var changed = false;
-            if (!Json.Same(await config, Config))
+            Services = fresh;
+            // A service changed (installed, started, another version): the Services pane's details follow.
+            if (WatchesServices)
             {
-                Config = config.Result;
-                changed = true;
+                _ = RefreshServiceVersionsAsync();
             }
-            if (!Json.Same(await services, Services))
-            {
-                Services = services.Result;
-                changed = true;
-                // A service changed (installed, started, another version): the Services pane's details follow.
-                if (WatchesServices)
-                {
-                    _ = RefreshServiceVersionsAsync();
-                }
-            }
-            if (changed || Error is not null)
-            {
-                Error = null;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+        }));
 
     public async Task RefreshIfVisibleAsync()
     {
@@ -528,18 +528,7 @@ public sealed class SettingsStore(FlockClient client) : Store
     /// <summary>Runs a change against the daemon, then reloads everything that may depend on it.</summary>
     public async Task PerformAsync(Func<FlockClient, Task> change)
     {
-        await Busy(async () =>
-        {
-            try
-            {
-                await change(client);
-                Error = null;
-            }
-            catch (FlockException e)
-            {
-                Error = e.Message;
-            }
-        });
+        await RunActionAsync(() => change(client), busy: true);
         await RefreshAsync();
         if (OnChange is not null)
         {
@@ -548,60 +537,23 @@ public sealed class SettingsStore(FlockClient client) : Store
     }
 
     /// <summary>Changes services and adopts the list the daemon returns.</summary>
-    public async Task PerformOnServicesAsync(Func<FlockClient, Task<List<Service>>> change)
+    public async Task<bool> PerformOnServicesAsync(Func<FlockClient, Task<List<Service>>> change)
     {
-        await Busy(async () =>
-        {
-            try
-            {
-                Services = await change(client);
-                Error = null;
-            }
-            catch (FlockException e)
-            {
-                Error = e.Message;
-            }
-        });
+        var succeeded = await RunActionAsync(async () => Services = await change(client), busy: true);
         if (OnChange is not null)
         {
             await OnChange();
         }
+        return succeeded;
     }
 
     /// <summary>Reloads the PHP catalog (not part of Refresh; only the PHP pane needs it).</summary>
-    public async Task RefreshPhpAsync()
-    {
-        try
-        {
-            var fresh = await client.PhpVersionsAsync();
-            if (!Json.Same(fresh, Php))
-            {
-                Php = fresh;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+    public Task RefreshPhpAsync() => ReadAsync(ReadSource.Php, client.PhpVersionsAsync, () => Php, fresh => Php = fresh);
 
     /// <summary>Runs a PHP action and adopts the catalog it returns; installs also change config and status.</summary>
     public async Task PerformOnPhpAsync(Func<FlockClient, Task<PhpCatalog>> change)
     {
-        await Busy(async () =>
-        {
-            try
-            {
-                Php = await change(client);
-                Error = null;
-            }
-            catch (FlockException e)
-            {
-                Error = e.Message;
-            }
-        });
+        await RunActionAsync(async () => Php = await change(client), busy: true);
         await RefreshAsync();
         if (OnChange is not null)
         {
@@ -612,46 +564,26 @@ public sealed class SettingsStore(FlockClient client) : Store
     /// <summary>FrankenPHP builds per PHP minor; loaded by the PHP pane. Null when the daemon doesn't offer FrankenPHP.</summary>
     public FrankenPhpState? FrankenPhp { get; private set; }
 
-    public async Task RefreshFrankenPhpAsync()
+    public Task RefreshFrankenPhpAsync() =>
+        ReadAsync(ReadSource.FrankenPhp, LoadFrankenPhpAsync, () => FrankenPhp, fresh => FrankenPhp = fresh);
+
+    private async Task<FrankenPhpState?> LoadFrankenPhpAsync()
     {
         try
         {
-            var fresh = await client.FrankenPhpAsync();
-            if (!Json.Same(fresh, FrankenPhp))
-            {
-                FrankenPhp = fresh;
-                Notify();
-            }
+            return await client.FrankenPhpAsync();
         }
         catch (FlockServerException e) when (e.StatusCode is 404 or 501)
         {
             // An older daemon, or a platform without FrankenPHP: the PHP pane leaves the section out.
-            if (FrankenPhp is not null)
-            {
-                FrankenPhp = null;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
+            return null;
         }
     }
 
     /// <summary>Runs a FrankenPHP action (installs return at once and continue as jobs) and adopts the state it returns.</summary>
     public async Task PerformOnFrankenPhpAsync(Func<FlockClient, Task<FrankenPhpState>> change)
     {
-        try
-        {
-            FrankenPhp = await change(client);
-            Error = null;
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-        }
-        Notify();
+        await RunActionAsync(async () => FrankenPhp = await change(client));
         if (OnChange is not null)
         {
             await OnChange();
@@ -661,42 +593,12 @@ public sealed class SettingsStore(FlockClient client) : Store
     /// <summary>The AI clients Flock's MCP server can be registered with; loaded by the AI pane.</summary>
     public McpState? Mcp { get; private set; }
 
-    public async Task RefreshMcpAsync()
-    {
-        try
-        {
-            var fresh = await client.McpAsync();
-            if (!Json.Same(fresh, Mcp))
-            {
-                Mcp = fresh;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+    public Task RefreshMcpAsync() => ReadAsync(ReadSource.Mcp, client.McpAsync, () => Mcp, fresh => Mcp = fresh);
 
     /// <summary>Registers or removes Flock with an AI client and adopts the list the daemon returns.</summary>
     public async Task PerformOnMcpAsync(Func<FlockClient, Task<McpState>> change)
     {
-        var failed = false;
-        await Busy(async () =>
-        {
-            try
-            {
-                Mcp = await change(client);
-                Error = null;
-            }
-            catch (FlockException e)
-            {
-                Error = e.Message;
-                failed = true;
-            }
-        });
-        if (failed)
+        if (!await RunActionAsync(async () => Mcp = await change(client), busy: true))
         {
             await RefreshMcpAsync();
         }
@@ -705,37 +607,12 @@ public sealed class SettingsStore(FlockClient client) : Store
     /// <summary>Node.js lines with install state; loaded by the Node pane.</summary>
     public NodeCatalog? Node { get; private set; }
 
-    public async Task RefreshNodeAsync()
-    {
-        try
-        {
-            var fresh = await client.NodeVersionsAsync();
-            if (!Json.Same(fresh, Node))
-            {
-                Node = fresh;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+    public Task RefreshNodeAsync() => ReadAsync(ReadSource.Node, client.NodeVersionsAsync, () => Node, fresh => Node = fresh);
 
     /// <summary>Runs a Node.js action and adopts the catalog it returns.</summary>
     public async Task PerformOnNodeAsync(Func<FlockClient, Task<NodeCatalog>> change)
     {
-        try
-        {
-            Node = await change(client);
-            Error = null;
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-        }
-        Notify();
+        await RunActionAsync(async () => Node = await change(client));
         await RefreshAsync();
     }
 
@@ -748,37 +625,12 @@ public sealed class SettingsStore(FlockClient client) : Store
 
     public Task RefreshServiceVersionsAsync() => Task.WhenAll(RefreshPostgresAsync(), RefreshCatalogAsync());
 
-    public async Task RefreshCatalogAsync()
-    {
-        try
-        {
-            var fresh = await client.CatalogAsync();
-            if (!Json.Same(fresh, Catalog))
-            {
-                Catalog = fresh;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+    public Task RefreshCatalogAsync() => ReadAsync(ReadSource.Catalog, client.CatalogAsync, () => Catalog, fresh => Catalog = fresh);
 
     /// <summary>Runs a catalog action (they return at once; installs continue as jobs) and adopts the catalog.</summary>
     public async Task PerformOnCatalogAsync(Func<FlockClient, Task<ServiceCatalog>> change)
     {
-        try
-        {
-            Catalog = await change(client);
-            Error = null;
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-        }
-        Notify();
+        await RunActionAsync(async () => Catalog = await change(client));
         await RefreshAsync();
         if (OnChange is not null)
         {
@@ -799,40 +651,16 @@ public sealed class SettingsStore(FlockClient client) : Store
         }
     }
 
-    public async Task RefreshPostgresAsync()
-    {
-        try
-        {
-            var fresh = await client.PostgresVersionsAsync();
-            if (!Json.Same(fresh, Postgres))
-            {
-                Postgres = fresh;
-                Notify();
-            }
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-            Notify();
-        }
-    }
+    public Task RefreshPostgresAsync() =>
+        ReadAsync(ReadSource.Postgres, client.PostgresVersionsAsync, () => Postgres, fresh => Postgres = fresh);
 
     /// <summary>
     /// Runs a PostgreSQL action and adopts the versions it returns, then lets the service list and
-    /// the tray catch up. Not Busy(): an install takes minutes and shouldn't freeze other services.
+    /// the tray catch up. Not busy: an install takes minutes and shouldn't freeze other services.
     /// </summary>
     public async Task PerformOnPostgresAsync(Func<FlockClient, Task<PostgresVersions>> change)
     {
-        try
-        {
-            Postgres = await change(client);
-            Error = null;
-        }
-        catch (FlockException e)
-        {
-            Error = e.Message;
-        }
-        Notify();
+        await RunActionAsync(async () => Postgres = await change(client));
         await RefreshAsync();
         if (OnChange is not null)
         {
@@ -886,27 +714,66 @@ public sealed class SettingsStore(FlockClient client) : Store
 
     public void DismissError()
     {
-        Error = null;
+        actionError = null;
+        readErrors.Clear();
         Notify();
     }
 
     public void ShowError(string message)
     {
-        Error = message;
+        actionError = message;
         Notify();
     }
 
-    private async Task Busy(Func<Task> work)
+    private async Task ReadAsync<T>(ReadSource source, Func<Task<T>> load, Func<T?> current, Action<T> apply)
     {
-        IsBusy = true;
-        Notify();
+        bool changed;
         try
         {
-            await work();
+            var fresh = await load();
+            changed = !Json.Same(fresh, current());
+            if (changed)
+            {
+                apply(fresh);
+            }
+            changed |= readErrors.Remove(source);
+        }
+        catch (FlockException e)
+        {
+            changed = !readErrors.TryGetValue(source, out var previous) || previous != e.Message;
+            readErrors[source] = e.Message;
+        }
+        if (changed)
+        {
+            Notify();
+        }
+    }
+
+    /// <summary>Only actions replace or clear the action failure; reads never change it.</summary>
+    private async Task<bool> RunActionAsync(Func<Task> action, bool busy = false)
+    {
+        if (busy)
+        {
+            IsBusy = true;
+            Notify();
+        }
+        try
+        {
+            await action();
+            actionError = null;
+            return true;
+        }
+        catch (FlockException e)
+        {
+            actionError = e.Message;
+            return false;
         }
         finally
         {
-            IsBusy = false;
+            if (busy)
+            {
+                IsBusy = false;
+            }
             Notify();
         }
     }

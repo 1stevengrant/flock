@@ -8,6 +8,7 @@ notification area icon, and the Mail, Dumps, Logs and Settings windows.
 windows/
   FlockKit/         models + API client (net10.0, no UI — the macOS app's FlockKit)
   FlockKit.Tests/   xUnit tests, run anywhere: dotnet test windows/FlockKit.Tests
+  FlockTray.Tests/  tray state tests, run on Windows: dotnet test windows/FlockTray.Tests -p:Platform=x64
   FlockTray/        the WinUI 3 app (unpackaged, self-contained Windows App SDK)
   FlockScreenshots/ the app's windows with demo data, as PNGs for the docs (never shipped)
   installer/        the Inno Setup script for Flock-Setup-x64.exe

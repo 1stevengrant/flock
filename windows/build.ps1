@@ -18,6 +18,9 @@ if (-not $version) { $version = "dev" }
 dotnet test (Join-Path $PSScriptRoot "FlockKit.Tests")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+dotnet test (Join-Path $PSScriptRoot "FlockTray.Tests") -p:Platform=$platform
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 dotnet publish (Join-Path $PSScriptRoot "FlockTray\FlockTray.csproj") -c Release -r "win-$Arch" -p:Platform=$platform `
     "-p:InformationalVersion=$version" -o $out
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

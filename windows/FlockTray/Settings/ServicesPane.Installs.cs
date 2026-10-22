@@ -147,8 +147,7 @@ internal sealed partial class ServicesPane
     {
         if (port is { } chosen && chosen != versions.Port)
         {
-            await Store.PerformOnServicesAsync(c => c.SetServicePortAsync("postgres", chosen));
-            if (Store.Error is not null)
+            if (!await Store.PerformOnServicesAsync(c => c.SetServicePortAsync("postgres", chosen)))
             {
                 return;
             }
