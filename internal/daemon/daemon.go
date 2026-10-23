@@ -35,6 +35,7 @@ import (
 	"flock/internal/ports"
 	"flock/internal/postgres"
 	"flock/internal/project"
+	"flock/internal/share"
 	"flock/internal/supervisor"
 	"flock/internal/web"
 	"flock/internal/xdebug"
@@ -76,6 +77,8 @@ type daemon struct {
 	// pg manages the PostgreSQL versions, catalog the other services (MySQL, Valkey, Meilisearch, ...).
 	pg      *postgres.Manager
 	catalog *catalog.Manager
+	// shares are the sites shared through tunnels (`flock share`); never kept across restarts.
+	shares *share.Manager
 
 	// leaves issues certificates for deep subdomains, aliases and unknown names during handshakes.
 	leaves *certs.Leaves
@@ -96,6 +99,10 @@ type daemon struct {
 }
 
 func (d *daemon) shutdown() {
+	// First, while reloads still work: stopping a share reloads the web server.
+	if d.shares != nil {
+		d.shares.StopAll()
+	}
 	d.reloadMu.Lock()
 	defer d.reloadMu.Unlock()
 
@@ -277,6 +284,12 @@ func Run(ctx context.Context, cfg Config) error {
 	go d.frankenphp.Run(ctx)
 	d.catalog = catalog.NewManager(cfg.Root, catalog.Kinds(runtime.GOOS), d.binaries, d.Mutate)
 	go d.catalog.Run(ctx)
+	d.shares = share.NewManager(cfg.Root, d.binaries)
+	d.shares.Changed = func() {
+		if err := d.reload(); err != nil {
+			d.setWarnings([]string{err.Error()})
+		}
+	}
 
 	// A broken config or a busy port must not kill the daemon: launchd would restart it in a loop
 	// and `flock status` could not explain what is wrong. Problems become warnings instead.
@@ -551,6 +564,10 @@ func (d *daemon) reload() error {
 		return debugPools[version]
 	}
 
+	// shareable are the served sites a share can serve: their document root and PHP version.
+	type shareable struct{ root, version string }
+	shareables := map[string]shareable{}
+
 	sites := cfg.AllSites()
 	extras := cfg.DomainsBySite(sites)
 	for _, site := range sites {
@@ -635,10 +652,34 @@ func (d *daemon) reload() error {
 			}
 		}
 		status.URL = scheme + "://" + domain + portSuffix(scheme, cfg)
+		shareables[site.Name] = shareable{root: ws.Root, version: version}
 
 		webSites = append(webSites, ws)
 		domains = append(append(domains, domain), served...)
 		statuses = append(statuses, status)
+	}
+
+	// Shares always go through the version's normal FastCGI pool, also for FrankenPHP sites: only
+	// FastCGI takes the per-request settings that keep a share safe (see web.Share).
+	var shares []web.Share
+	if d.shares != nil {
+		keep := map[string]bool{}
+		for name := range shareables {
+			keep[name] = true
+		}
+		d.shares.Retain(keep)
+		for _, s := range d.shares.Serving() {
+			info, ok := shareables[s.Site]
+			if !ok {
+				continue
+			}
+			upstreams, err := pool(info.version)
+			if err != nil {
+				return err
+			}
+			site, _ := cfg.FindSite(s.Site)
+			shares = append(shares, web.Share{Port: s.Port, Root: info.root, Public: filepath.Join(site.Path, "public"), FPM: upstreams, Debug: s.Debug})
+		}
 	}
 
 	if runtime.GOOS == "windows" {
@@ -710,7 +751,7 @@ func (d *daemon) reload() error {
 		bind = ""
 	}
 
-	if err := d.applyWeb(cfg, bind, webSites, waiting, ca); err != nil {
+	if err := d.applyWeb(cfg, bind, webSites, waiting, shares, ca); err != nil {
 		warnings = append(warnings, "web: "+err.Error())
 	}
 
@@ -728,7 +769,7 @@ func (d *daemon) reload() error {
 
 // applyWeb (re)configures Caddy. Before the first successful start it checks the ports itself,
 // because Caddy's own error does not say who holds them.
-func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, waiting []web.Waiting, ca *certs.CA) error {
+func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, waiting []web.Waiting, shares []web.Share, ca *certs.CA) error {
 	owned := map[int]bool{}
 	if d.webUp && d.cfg != nil {
 		owned[d.cfg.Ports.HTTP], owned[d.cfg.Ports.HTTPS] = true, true
@@ -747,6 +788,7 @@ func (d *daemon) applyWeb(cfg *config.Config, bind string, sites []web.Site, wai
 		Bind:       bind,
 		Sites:      sites,
 		Waiting:    waiting,
+		Shares:     shares,
 		TLD:        cfg.TLD,
 		Issue:      func(name string) (*tls.Certificate, error) { return d.leaves.Get(ca, name) },
 	})
@@ -857,7 +899,7 @@ func (d *daemon) Status() api.Status {
 		Version:   d.version,
 		PID:       os.Getpid(),
 		StartedAt: d.startedAt,
-		Sites:     withBoost(d.liveSites()),
+		Sites:     d.withShares(withBoost(d.liveSites())),
 		Processes: d.procs.Status(),
 		Warnings:  d.warnings,
 	}
