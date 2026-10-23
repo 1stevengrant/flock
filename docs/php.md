@@ -4,14 +4,14 @@ Flock installs and manages PHP for you. Several versions live side by side, and 
 
 ## Installing versions
 
-PHP 8.1 and newer are supported.
+PHP 8.1 and newer are supported, and on Windows also 7.4 and 8.0.
 
 :::app
-Open **Settings…** from the Flock panel and go to **PHP**. Click **Install** next to a version, or **Update to …** when a newer patch release is ready. **Check now** looks for new releases.
+Open **Settings…** from the Flock panel and go to **PHP**. Click **Install** next to a version, or **Update to …** when a newer patch release is out. **Check now** looks for new releases.
 
 ![Settings → PHP](screenshot:settings-php)
 
-To remove a version, open its **⋯** menu and choose **Uninstall…**.
+To remove a version, open its **⋯** menu and choose **Uninstall…**. Uninstalling also removes that version's `php.ini`.
 :::
 
 :::cli
@@ -20,22 +20,14 @@ flock php install 8.5
 flock php install 8.4
 flock php list
 ```
-
-To install from a file you already have, use `--from`:
-
-```bash
-flock php install --from php-8.5.0-nts-Win32-vs17-x64.zip
-```
 :::
 
-- **Windows:** Flock downloads the official non-thread-safe x64 builds from windows.php.net and verifies their SHA-256 checksums. Each version runs a small pool of `php-cgi` workers, and requests go to the least busy one.
-- **macOS:** Flock uses static builds for Apple silicon, with PHP-FPM. When no prebuilt binary is available, Flock compiles one locally (about 5–10 minutes, using the Xcode Command Line Tools).
+Every version is a download: Flock checks the checksum and the signature of the list it comes from before installing it. Nothing is compiled on your machine.
 
-In the background, Flock can keep patch releases and new versions ready (built on macOS, downloaded on Windows), so updating is instant.
+- **macOS:** builds for Apple silicon made by Flock, with PHP-FPM.
+- **Windows:** the official thread-safe x64 builds from windows.php.net, plus Flock's pack of extensions the official builds don't include. Each version runs a small pool of `php-cgi` workers, and requests go to the least busy one.
 
-:::app
-Turn this on or off under **Settings → PHP** with **Build updates and new PHP versions automatically** (macOS) or **Download updates and new PHP versions automatically** (Windows).
-:::
+Updating installs the newest patch release, and keeps your `php.ini`. When a build turns out to be broken and is withdrawn, Flock replaces it with a fixed one by itself.
 
 ## The default version
 
@@ -53,23 +45,47 @@ flock use 8.5
 
 ## Extensions
 
-Flock's PHP builds include the extensions most Laravel apps need:
+Flock's PHP includes the extensions most Laravel apps need, all of them on, with nothing to set up:
 
 ```text
-bcmath  bz2  calendar  ctype  curl  dom  exif  fileinfo  filter  ftp  gd  gmp
-iconv  igbinary  intl  mbregex  mbstring  mysqli  mysqlnd  opcache  openssl
-pcntl  pdo  pdo_mysql  pdo_pgsql  pdo_sqlite  pgsql  phar  posix  readline
-redis  session  simplexml  sockets  sodium  sqlite3  tokenizer  xml
-xmlreader  xmlwriter  xsl  zip  zlib
+apcu  bcmath  bz2  calendar  ctype  curl  dom  exif  fileinfo  filter  ftp  gd
+gmp  iconv  igbinary  imagick  intl  ldap  mbstring  memcached  mongodb  mysqli
+opcache  openssl  pcntl  pdo_mysql  pdo_pgsql  pdo_sqlite  pgsql  phar  posix
+readline  redis  session  shmop  simplexml  soap  sockets  sodium  sqlite3
+tokenizer  xml  xmlreader  xmlwriter  xsl  zip  zlib
 ```
 
-Xdebug is included as a shared extension. See [Xdebug](xdebug.md).
+- On macOS, `sysvmsg`, `sysvsem` and `sysvshm` are included too, and on Windows `gettext`.
+- **pcov** is on for the command line only (`php`, `composer`, `php artisan test`), so your tests can measure code coverage while web requests stay fast.
+- **Xdebug** loads only for requests that ask for it. See [Xdebug](xdebug.md).
+- On Windows, `memcached`, `pcntl` and `posix` aren't available, and `mongodb` needs PHP 8.1 or newer.
 
-> The `redis` extension isn't available in the Windows builds. Use `REDIS_CLIENT=predis` there.
+### Which extensions a project needs
+
+A project should list the extensions it uses in `composer.json`, as `"ext-intl": "*"`. Then `composer install` refuses to run on a server that doesn't have them, instead of the app failing there later. Packages do this for themselves, so most requirements already come with them.
+
+For each site, Flock shows the extensions it requires, which package requires each one, and whether Flock's PHP includes it. When a site requires one Flock doesn't include, the site shows it as a problem.
+
+For Laravel apps, Flock also looks at `.env` and `config/` for extensions the app uses without requiring them: the database driver (`DB_CONNECTION=pgsql` needs `pdo_pgsql`), Memcached or APCu as the cache or session store, Redis through phpredis, and the Imagick driver of Intervention Image. Each one comes with **Add to composer.json**, which runs `composer require ext-<name>:*` in the project. These hints are Laravel-only for now.
+
+:::app
+In **Settings → Sites**, click the extensions button (the puzzle piece) next to a site.
+:::
+
+:::cli
+Run it in the project's folder:
+
+```bash
+flock ext
+flock ext add pdo_pgsql
+```
+:::
+
+AI agents get the same list from the `php_extensions` tool of Flock's [MCP server](ai.md).
 
 ## php.ini
 
-Each version has its own `php.ini`. Flock writes sensible development defaults the first time and never overwrites your changes:
+Each version has its own `php.ini`. Flock writes sensible development defaults the first time and never overwrites your changes, but uninstalling the version removes it:
 
 | Setting | Default |
 | --- | --- |
@@ -86,6 +102,35 @@ To edit it, open the version's **⋯** menu in **Settings → PHP** and choose *
 The file is `php/8.5/php.ini` inside Flock's [data directory](configuration.md#data-directory), and `php --ini` prints its path.
 :::
 
+## FrankenPHP
+
+Instead of PHP-FPM (`php-cgi` on Windows), a site can run on [FrankenPHP](https://frankenphp.dev). It gets a FrankenPHP process of its own, and Flock's web server keeps serving its domains and certificates. FrankenPHP needs PHP 8.2 or newer. It's downloaded for a PHP version the first time a site uses it, and uses that version's `php.ini`. Requests that ask for [Xdebug](xdebug.md) still go to the regular PHP pool.
+
+A site on FrankenPHP runs in one of two modes:
+
+- **Classic** boots the app for every request, as PHP-FPM does.
+- **Laravel Octane** runs Octane's workers, so the app stays booted between requests. It needs Laravel Octane in the project (`composer require laravel/octane`). Flock creates `public/frankenphp-worker.php` in the project from Octane's stub, as `php artisan octane:frankenphp` does. Restart the site's FrankenPHP to load changed code into the workers.
+
+:::app
+In **Settings → Sites**, select the site and choose **FrankenPHP** under **Runs on** in its **Server** section. Then pick **Classic** or **Laravel Octane** under **Mode**. **Restart** restarts the site's FrankenPHP.
+
+**Settings → PHP** lists the FrankenPHP builds for your PHP versions. Installing one ahead makes switching a site over immediate.
+:::
+
+:::cli
+```bash
+flock frankenphp on acme            # classic mode when switching from PHP-FPM
+flock frankenphp on acme --octane   # Laravel Octane's worker mode
+flock frankenphp on acme --classic  # back from Octane to classic mode
+flock frankenphp restart acme       # load changed code into Octane's workers
+flock frankenphp off acme           # back to PHP-FPM (php-cgi on Windows)
+flock frankenphp list               # FrankenPHP builds, installed and available
+flock frankenphp install 8.4        # install or update the build for a PHP version
+```
+
+Run them without a site name inside the project folder.
+:::
+
 ## Composer
 
-`composer` is included and runs with the PHP version of the current project, so `composer install` always matches the version the browser uses.
+`composer` is included and runs with the PHP version of the current project, so `composer install` always matches the version the browser uses. If the project's PHP version isn't installed yet, `php` and `composer` offer to install it the first time you run them.

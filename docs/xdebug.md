@@ -26,8 +26,8 @@ The setting applies to all PHP versions.
 
 While Xdebug is on, a request goes to the Xdebug pool when:
 
-- it comes from an Xdebug helper extension in your browser,
-- its URL has `XDEBUG_TRIGGER=1`, for example `https://acme.test/checkout?XDEBUG_TRIGGER=1`,
+- it comes from an Xdebug helper extension in your browser (which sets the `XDEBUG_SESSION` cookie),
+- its URL has `XDEBUG_TRIGGER=1`, for example `https://acme.test/checkout?XDEBUG_TRIGGER=1` (`XDEBUG_SESSION` and `XDEBUG_SESSION_START` work too),
 - or it's for a site with breakpoints set in PhpStorm, if you turn that on.
 
 ### PhpStorm breakpoints

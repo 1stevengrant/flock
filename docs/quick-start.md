@@ -42,7 +42,7 @@ Open [http://acme.test](http://acme.test). That's it.
 ## 3. Turn on HTTPS
 
 :::app
-In **Settings → Sites**, switch on **HTTPS** in the `acme` row.
+In **Settings → Sites**, select `acme` and switch on **HTTPS** in its **Site** section.
 :::
 
 :::cli
@@ -51,14 +51,14 @@ flock secure acme
 ```
 :::
 
-Then update `APP_URL` in your `.env` to `https://acme.test`. Flock reminds you if it doesn't match.
+Then update `APP_URL` in your `.env` to `https://acme.test`.
 
 ## 4. Pick the PHP and Node versions
 
 Pin the versions for the project. Flock writes them to `.flockrc` (PHP) and `.nvmrc` (Node), which you can commit.
 
 :::app
-In **Settings → Sites**, choose the PHP and Node versions in the `acme` row. Then click the pin icon (macOS) or open the **…** menu (Windows) and choose **Pin PHP 8.5 to Project…** and **Pin Node 22 to Project…**.
+In **Settings → Sites**, select `acme` and choose the PHP and Node versions under **Versions**. Then click the pin icon (macOS) or open the **…** menu (Windows) and choose **Pin PHP 8.5 to Project…** and **Pin Node 22 to Project…**.
 
 ![Pinning versions in Settings → Sites](screenshot:settings-sites-pin)
 
@@ -67,6 +67,7 @@ Install versions you don't have yet from the **PHP** and **Node** panes first.
 
 :::cli
 ```bash
+cd ~/Code/acme
 flock pin php 8.5
 flock pin node 22
 ```
@@ -77,15 +78,15 @@ If a version isn't installed yet, `php` and `node` offer to install it the first
 ## 5. Add a database
 
 :::app
-In **Settings → Services**, switch the filter to **All**, select **PostgreSQL** and click **Install PostgreSQL 18**.
+In **Settings → Services**, select **PostgreSQL** and click **Install PostgreSQL 18.x** (the button shows the exact release).
 
-Creating a database isn't in the app yet. Run `flock postgres create-db acme` in a terminal, use your database client, or let `php artisan migrate` create it when it asks.
+Creating a database isn't in the app yet. Run `flock services create-db postgres acme` in a terminal, use your database client, or let `php artisan migrate` create it when it asks.
 :::
 
 :::cli
 ```bash
-flock postgres install
-flock postgres create-db acme
+flock services install postgres
+flock services create-db postgres acme
 ```
 :::
 
@@ -112,6 +113,7 @@ MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
 MAIL_USERNAME="${APP_NAME}"
 MAIL_PASSWORD=null
+MAIL_SCHEME=null
 ```
 
 :::app
@@ -132,3 +134,5 @@ npm install && npm run dev
 ```
 
 Your app is live at `https://acme.test`.
+
+Using an AI agent like Claude Code or Cursor? [Connect it to Flock](ai.md) so it knows your sites, versions and logs.

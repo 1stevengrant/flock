@@ -816,7 +816,14 @@ func (d *daemon) postgresSpec(cfg *config.Config, id string) (supervisor.Spec, e
 	if err := postgres.InitDB(bin, data); err != nil {
 		return supervisor.Spec{}, err
 	}
-	return postgres.Spec(bin, data, filepath.Join(d.root, "run"), filepath.Join(d.root, "log", "postgres.log"), cfg.Ports.Postgres), nil
+	run := "" // Windows has no unix sockets: clients connect over TCP
+	if runtime.GOOS != "windows" {
+		var err error
+		if run, err = paths.EnsureRun(d.root); err != nil {
+			return supervisor.Spec{}, err
+		}
+	}
+	return postgres.Spec(bin, data, run, filepath.Join(d.root, "log", "postgres.log"), cfg.Ports.Postgres), nil
 }
 
 // PostgresVersions implements api.Backend.
