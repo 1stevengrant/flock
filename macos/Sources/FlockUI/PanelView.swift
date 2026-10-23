@@ -369,6 +369,10 @@ private struct SiteRow: View {
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
+                if site.shared {
+                    Badge(text: "Shared", color: .green)
+                        .help(site.share?.url ?? "")
+                }
                 if site.server == .frankenphp {
                     Badge(text: site.worker == .octane ? "Octane" : "FrankenPHP", color: .secondary)
                 }

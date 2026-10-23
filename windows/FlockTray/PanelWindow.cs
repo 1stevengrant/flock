@@ -120,8 +120,8 @@ internal sealed partial class PanelWindow : Window
         }
         // Before the window has been shown once, layout may not be measurable yet.
         var height = scroller.Content is UIElement measured && measured.DesiredSize.Height > 100 ? measured.DesiredSize.Height + 2 : 560;
-        var w = (int)(Width * scale);
         // The size set below includes the window border, which the content doesn't get.
+        var w = (int)(Width * scale) + AppWindow.Size.Width - AppWindow.ClientSize.Width;
         var frame = AppWindow.Size.Height - AppWindow.ClientSize.Height;
         var max = (int)(area.Height * 0.85);
         var needed = (int)Math.Ceiling(height * scale) + frame;
@@ -148,7 +148,8 @@ internal sealed partial class PanelWindow : Window
     private void Render()
     {
         dirty = false;
-        var root = new StackPanel { Spacing = 12, Padding = new Thickness(16), Width = Width };
+        // Fills the window's client area rather than a fixed width, so the right padding matches the left.
+        var root = new StackPanel { Spacing = 12, Padding = new Thickness(16) };
         root.Children.Add(Header());
         if (model.Updater.Available is { } update)
         {
@@ -347,6 +348,12 @@ internal sealed partial class PanelWindow : Window
         if (site.IsFrankenPhp)
         {
             php = Ui.Row(6, Ui.Badge(site.Worker == Status.SiteServer.Octane ? "Octane" : "FrankenPHP", Ui.Tone.Neutral), php);
+        }
+        if (site.IsShared)
+        {
+            var shared = Ui.Badge("Shared");
+            ToolTipService.SetToolTip(shared, $"Shared at {site.Share!.Url}");
+            php = Ui.Row(6, shared, php);
         }
         var row = Ui.Spread(Ui.Row(8, icon, name), php);
 

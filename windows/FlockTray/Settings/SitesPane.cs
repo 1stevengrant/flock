@@ -115,6 +115,12 @@ internal sealed partial class SitesPane(SettingsWindow window, AppModel model) :
             ToolTipService.SetToolTip(warning, problem);
             marks.Children.Add(warning);
         }
+        if (site.IsShared)
+        {
+            var shared = Ui.Badge("Shared");
+            ToolTipService.SetToolTip(shared, $"Shared at {site.Share!.Url}");
+            marks.Children.Add(shared);
+        }
         if (site.Secured)
         {
             var secured = Ui.Icon(Ui.GlyphLock, 12, Ui.SecondaryText);
@@ -228,6 +234,7 @@ internal sealed partial class SitesPane(SettingsWindow window, AppModel model) :
         }
         siteSection.Children.Add(Ui.Caption("The folder Flock serves the site from. One picked here applies on this machine only; pin it (…) to write it into .flockrc for everyone.", Ui.TertiaryText));
         panel.Children.Add(siteSection);
+        panel.Children.Add(Share(site));
 
         // Versions: PHP and Node.js, with what pins or isolates them.
         var php = Picker("PHP", site.Php, site.PhpSource, site.PhpPinned, site.PhpFile, config?.DefaultPhp ?? "",

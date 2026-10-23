@@ -11,6 +11,7 @@ import (
 
 	"flock/internal/api"
 	"flock/internal/project"
+	"flock/internal/share"
 )
 
 func newStatusCommand() *cobra.Command {
@@ -66,6 +67,11 @@ func newStatusCommand() *cobra.Command {
 					line += ", PhpStorm breakpoints in " + strings.Join(debugging, ", ")
 				}
 				fmt.Fprintln(out, "xdebug    "+line)
+			}
+			for _, site := range st.Sites {
+				if site.Share != nil {
+					fmt.Fprintf(out, "shared    %s\n", shareLine(*site.Share))
+				}
 			}
 			for _, p := range st.Processes {
 				state := "up"
@@ -138,6 +144,30 @@ func newSitesCommand() *cobra.Command {
 			return w.Flush()
 		},
 	}
+}
+
+// shareLine describes a site's share for `flock status`, so a running tunnel is never out of sight.
+func shareLine(st api.ShareStatus) string {
+	switch st.State {
+	case share.Building:
+		return st.Site + ": building the assets"
+	case share.Starting:
+		return st.Site + ": starting the tunnel"
+	case share.Failed:
+		return st.Site + ": failed: " + st.Error
+	}
+	var details []string
+	if st.ExpiresAt != nil {
+		details = append(details, "ends "+st.ExpiresAt.Local().Format(time.Kitchen))
+	}
+	if len(st.Allow) > 0 {
+		details = append(details, "only "+strings.Join(st.Allow, ", "))
+	}
+	line := st.Site + " → " + st.URL
+	if len(details) > 0 {
+		line += " (" + strings.Join(details, ", ") + ")"
+	}
+	return line
 }
 
 // defaultInstallLine describes the first run's install of a default version ("" once it is set).

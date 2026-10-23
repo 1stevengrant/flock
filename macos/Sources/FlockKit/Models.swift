@@ -132,8 +132,13 @@ public struct Status: Decodable, Sendable, Equatable {
         public var frankenPHP: SiteFrankenPHP?
         /// Whether the project uses Laravel Boost and has Flock's guideline.
         public var boost: Boost
+        /// The site's tunnel (`flock share`), while there is one.
+        public var share: ShareStatus?
 
         public var id: String { name }
+
+        /// The site is reachable at a public share URL right now.
+        public var shared: Bool { share?.state == .running }
 
         /// FrankenPHP needs PHP 8.2 or newer.
         public var supportsFrankenPHP: Bool { Self.frankenPHPSupports(php) }
@@ -168,7 +173,7 @@ public struct Status: Decodable, Sendable, Equatable {
         enum CodingKeys: String, CodingKey {
             case name, domain, path, php, phpSource, phpPinned, phpFile, node, nodeSource, nodePinned, nodeFile, nodeShadowed
             case secured, parked, url, problem, notice, root, rootSource, rootPinned, rootFile, rootState, rootSuggestions
-            case domains, debugging, server, worker, octaneAvailable, boost
+            case domains, debugging, server, worker, octaneAvailable, boost, share
             case frankenPHP = "frankenphp"
         }
 
@@ -204,6 +209,7 @@ public struct Status: Decodable, Sendable, Equatable {
             octaneAvailable = try c.decodeIfPresent(Bool.self, forKey: .octaneAvailable) ?? false
             frankenPHP = try c.decodeIfPresent(SiteFrankenPHP.self, forKey: .frankenPHP)
             boost = try c.decodeIfPresent(Boost.self, forKey: .boost) ?? .none
+            share = try c.decodeIfPresent(ShareStatus.self, forKey: .share)
         }
     }
 
