@@ -61,6 +61,37 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     #expect(status.sites[1].domains.isEmpty)
 }
 
+@Test func decodesTheDocumentRoot() throws {
+    let status = try decode(Status.self, """
+    {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","processes":[],
+     "sites":[{"name":"zoo","domain":"zoo.test","path":"/code/zoo","php":"8.5","root":".","root_source":"default","root_pinned":"","root_file":"",
+               "root_state":"not_found","root_suggestions":["src/www"],"notice":"No document root found"},
+              {"name":"shop","domain":"shop.test","path":"/code/shop","php":"8.5","root":"web","root_source":"isolated",
+               "root_pinned":"public","root_file":"/code/shop/.flockrc"},
+              {"name":"old","domain":"old.test","path":"/code/old","php":"8.5"},
+              {"name":"cms","domain":"cms.test","path":"/code/cms","php":"8.5","root":"src/www","root_source":"isolated","root_state":"empty"}]}
+    """)
+
+    let zoo = status.sites[0]
+    #expect(zoo.rootState == .notFound && zoo.rootSuggestions == ["src/www"] && zoo.notice == "No document root found")
+    #expect(zoo.root == "." && zoo.rootSource == .default && !zoo.rootPinnedHere)
+    let shop = status.sites[1]
+    #expect(shop.root == "web" && shop.rootSource == .isolated && shop.rootPinned == "public" && shop.rootPinnedHere && shop.rootState == .ok)
+    // A daemon from before document roots: the project folder, detected.
+    let old = status.sites[2]
+    #expect(old.root == "." && old.rootSource == .default && old.rootState == .ok && old.rootSuggestions.isEmpty && old.notice == nil)
+    #expect(status.sites[3].rootState == .empty && status.sites[3].notice == nil)
+}
+
+@Test func turnsAChosenFolderIntoADocumentRoot() throws {
+    let site = try decode(Status.Site.self, #"{"name":"zoo","path":"/code/zoo"}"#)
+    #expect(site.root(for: URL(fileURLWithPath: "/code/zoo/src/www")) == "src/www")
+    #expect(site.root(for: URL(fileURLWithPath: "/code/zoo/src/www/")) == "src/www")
+    #expect(site.root(for: URL(fileURLWithPath: "/code/zoo")) == ".")
+    #expect(site.root(for: URL(fileURLWithPath: "/code/zoo-2/www")) == nil)
+    #expect(site.root(for: URL(fileURLWithPath: "/code")) == nil)
+}
+
 @Test func decodesAMinimalStatusWithOmittedFields() throws {
     let status = try decode(Status.self, """
     {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","dns":{"tld":"test","addr":""},

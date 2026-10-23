@@ -60,6 +60,21 @@ const (
 	WaitingUnavailable = "unavailable"
 )
 
+// Rootless is a linked site that isn't served because Flock can't tell its document root, or the
+// root has nothing to serve: the root set for it doesn't exist, a Composer project has none of the
+// usual ones, or the root has no index.php or index.html. Its names get Flock's page saying so,
+// with the folders that could be the root.
+type Rootless struct {
+	Domain      string
+	Aliases     []string
+	Name        string   // the site's name
+	State       string   // why: "missing", "not_found" or "empty" (see project.DocRoot)
+	Root        string   // the root set for the site or detected, relative to the project ("." for itself)
+	File        string   // the project file that sets Root ("" when it's set on this machine or detected)
+	Set         bool     // Root is set for the site (on this machine or in File) rather than detected
+	Suggestions []string // folders with an index.php, relative to the project
+}
+
 // Config is everything the web server needs to know.
 type Config struct {
 	StorageDir string
@@ -68,9 +83,10 @@ type Config struct {
 	HTTPSPort  int
 	// Bind is the listen host. macOS only lets non-root processes bind ports below 1024
 	// on the wildcard address, so it is empty there and non-local clients are rejected per request.
-	Bind    string
-	Sites   []Site
-	Waiting []Waiting
+	Bind     string
+	Sites    []Site
+	Waiting  []Waiting
+	Rootless []Rootless
 	// Shares are sites served to tunnels, each on a loopback port of its own (see Share).
 	Shares []Share
 	// TLD limits the names HTTPS answers for; Issue makes a certificate for one of them.
@@ -88,15 +104,6 @@ func hosts(name string) []string {
 		prefix += "*."
 	}
 	return hosts
-}
-
-// DocumentRoot picks <path>/public when it has an index.php (Laravel and most frameworks), else path.
-func DocumentRoot(path string) string {
-	public := filepath.Join(path, "public")
-	if _, err := os.Stat(filepath.Join(public, "index.php")); err == nil {
-		return public
-	}
-	return path
 }
 
 // Caddyfile renders the configuration. It is exported for tests.
@@ -159,6 +166,17 @@ func Caddyfile(cfg Config) string {
 		}
 	}
 
+	// A site without a usable document root says why, with the root, the file that sets it and the
+	// folders that could be the root.
+	for _, r := range cfg.Rootless {
+		vars := rootlessVars(r)
+		for _, name := range append([]string{r.Domain}, r.Aliases...) {
+			hosts := hosts(name)
+			fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s}\n", addresses("http", hosts, cfg), vars, unlinked(cfg))
+			fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s%s%s}\n", addresses("https", hosts, cfg), tlsBlock, vars, unlinked(cfg))
+		}
+	}
+
 	// Any other name gets the "not linked" page, its host and scheme filled in by templates.
 	fmt.Fprintf(&b, "\n%s {\n\timport flock_site\n%s}\n", addresses("http", []string{""}, cfg), unlinked(cfg))
 	// Without this, https:// to an unknown name would fail the handshake (or hang).
@@ -169,6 +187,18 @@ func Caddyfile(cfg Config) string {
 	}
 
 	return b.String()
+}
+
+// rootlessVars sets {http.vars.flock_root_*} for a site without a usable document root: the site's
+// name, why, the root and whether it's set for the site, the file that sets it, and the suggested
+// roots (separated by |).
+func rootlessVars(r Rootless) string {
+	set := ""
+	if r.Set {
+		set = "1"
+	}
+	return fmt.Sprintf("\tvars {\n\t\tflock_root_site %s\n\t\tflock_root_state %s\n\t\tflock_root %s\n\t\tflock_root_set %s\n\t\tflock_root_file %s\n\t\tflock_root_suggestions %s\n\t}\n",
+		quote(r.Name), quote(r.State), quote(r.Root), quote(set), quote(r.File), quote(strings.Join(r.Suggestions, "|")))
 }
 
 // siteName is the name the CLI takes for a domain: watchtower for watchtower.test.

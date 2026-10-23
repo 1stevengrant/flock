@@ -74,6 +74,45 @@ public class DecodingTests
     }
 
     [Fact]
+    public void DecodesTheDocumentRoot()
+    {
+        var status = FlockJson.Decode<Status>("""
+            {"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","processes":[],
+             "sites":[{"name":"zoo","domain":"zoo.test","path":"C:\\code\\zoo","php":"8.5","root":".","root_source":"default",
+                       "root_pinned":"","root_file":"","root_state":"not_found","root_suggestions":["src/www"],"notice":"No document root found"},
+                      {"name":"shop","domain":"shop.test","path":"C:\\code\\shop","php":"8.5","root":"web","root_source":"isolated",
+                       "root_pinned":"public","root_file":"C:\\code\\shop\\.flockrc"},
+                      {"name":"old","domain":"old.test","path":"C:\\code\\old","php":"8.5"},
+                      {"name":"cms","domain":"cms.test","path":"C:\\code\\cms","php":"8.5","root":"src/www","root_source":"isolated","root_state":"empty"}]}
+            """);
+
+        var zoo = status.Sites[0];
+        Assert.Equal((Status.DocumentRootState.NotFound, "No document root found"), (zoo.RootState, zoo.Notice));
+        Assert.Equal(["src/www"], zoo.RootSuggestions);
+        Assert.False(zoo.RootPinnedHere);
+        var shop = status.Sites[1];
+        Assert.Equal(("web", Status.VersionSource.Isolated, "public", ""), (shop.Root, shop.RootSource, shop.RootPinned, shop.RootState));
+        Assert.True(shop.RootPinnedHere);
+        // A daemon from before document roots: the project folder, detected.
+        var old = status.Sites[2];
+        Assert.Equal((".", Status.VersionSource.Default, "", null), (old.Root, old.RootSource, old.RootState, old.Notice));
+        Assert.Empty(old.RootSuggestions);
+        Assert.Equal((Status.DocumentRootState.Empty, null), (status.Sites[3].RootState, status.Sites[3].Notice));
+    }
+
+    [Theory]
+    [InlineData(@"C:\code\zoo\src\www", "src/www")]
+    [InlineData(@"c:\Code\Zoo\src\www\", "src/www")]
+    [InlineData(@"C:\code\zoo", ".")]
+    [InlineData(@"C:\code\zoo-2\www", null)]
+    [InlineData(@"C:\code", null)]
+    public void TurnsAChosenFolderIntoADocumentRoot(string folder, string? root)
+    {
+        var site = new Status.Site { Path = @"C:\code\zoo" };
+        Assert.Equal(root, site.RootFor(folder));
+    }
+
+    [Fact]
     public void DecodesExtraDomainsAndTheWildcardState()
     {
         var status = FlockJson.Decode<Status>("""

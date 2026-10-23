@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"flock/internal/api"
+	"flock/internal/project"
 	"flock/internal/share"
 )
 
@@ -111,7 +112,7 @@ func newSitesCommand() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "SITE\tPHP\tURL\tPATH")
+			fmt.Fprintln(w, "SITE\tPHP\tURL\tROOT\tPATH")
 
 			st, err := s.client().Status(cmd.Context())
 			if err == nil {
@@ -127,7 +128,7 @@ func newSitesCommand() *cobra.Command {
 							version += " (Octane)"
 						}
 					}
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", site.Name, version, url, site.Path)
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", site.Name, version, url, rootColumn(docRootOf(site)), site.Path)
 				}
 				return w.Flush()
 			}
@@ -138,7 +139,7 @@ func newSitesCommand() *cobra.Command {
 				if site.Secured {
 					scheme = "https"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s://%s\t%s\n", site.Name, s.cfg.PHPFor(site), scheme, s.cfg.Domain(site), site.Path)
+				fmt.Fprintf(w, "%s\t%s\t%s://%s\t%s\t%s\n", site.Name, s.cfg.PHPFor(site), scheme, s.cfg.Domain(site), rootColumn(project.RootFor(&site)), site.Path)
 			}
 			return w.Flush()
 		},
