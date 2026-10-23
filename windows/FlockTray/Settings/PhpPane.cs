@@ -43,7 +43,7 @@ internal sealed class PhpPane(SettingsWindow window, RuntimeService model) : Pan
     /// </summary>
     private void ConfirmPendingLink()
     {
-        if (Model.PendingInstall is not { Service: InstallLink.Php } link || link.ResolvePhp(Store.Php) is not { } request)
+        if (Model.PendingInstall is not { Service: InstallLink.Php } link || link.ResolvePhp(Model.Php.Current) is not { } request)
         {
             return;
         }
@@ -59,7 +59,7 @@ internal sealed class PhpPane(SettingsWindow window, RuntimeService model) : Pan
             if (await Window.Confirm(request.Title, request.Message, "Install"))
             {
                 var minor = target.Line;
-                await Run(minor, () => Store.PerformOnPhpAsync(c => c.InstallPhpAsync(minor)));
+                await Model.Php.InstallAsync(minor);
             }
         });
     }

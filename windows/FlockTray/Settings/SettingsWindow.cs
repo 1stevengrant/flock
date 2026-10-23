@@ -234,6 +234,13 @@ internal sealed partial class SettingsWindow : FlockWindow
     /// <summary>Renders the current pane again from the latest state.</summary>
     public Panel Rerender()
     {
+        if (scroller.Content is Grid previousHost)
+        {
+            foreach (var previousContainer in previousHost.Children.OfType<Panel>())
+            {
+                previousContainer.Children.Clear();
+            }
+        }
         Ui.ShowError(error, model.RuntimeError ?? model.Preferences.Error ?? model.Configuration.Error ?? model.Php.Error ?? model.FrankenPhp.Error ??
             model.Node.Error ?? model.Services.Error ?? model.Postgres.Error ?? model.Catalog.Error ?? model.Mcp.Error ??
              model.Sites.Error ?? model.Dumps.Error ?? model.ActionError);
@@ -253,7 +260,8 @@ internal sealed partial class SettingsWindow : FlockWindow
         {
             try
             {
-                container.Children.Add(panes[current].GetRoot());
+                var paneRoot = panes[current].GetRoot();
+                container.Children.Add(paneRoot);
             }
             catch (Exception e)
             {
@@ -331,11 +339,11 @@ internal sealed partial class SettingsWindow : FlockWindow
 
     public override async Task ReleaseAsync()
     {
+        await viewModel.DisposeAsync();
         foreach (var pane in panes.Values)
         {
             await pane.ReleaseAsync();
         }
-        await viewModel.DisposeAsync();
         await base.ReleaseAsync();
     }
 }

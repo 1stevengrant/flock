@@ -104,12 +104,12 @@ internal sealed partial class DumpsWindow : FlockWindow
         foreach (var kind in EventKind.All)
         {
             var item = new ToggleMenuFlyoutItem { Text = EventKind.Name(kind) };
-            item.Click += (_, _) => _ = model.SetCaptureAsync(kind, item.IsChecked);
+            item.Click += async (_, _) => await viewModel.SetCaptureAsync(kind, item.IsChecked);
             kindItems[kind] = item;
             kinds.Items.Add(item);
         }
         kinds.Items.Add(new MenuFlyoutSeparator());
-        dumpsInPage.Click += (_, _) => _ = model.SetDumpsInPageAsync(dumpsInPage.IsChecked);
+        dumpsInPage.Click += async (_, _) => await viewModel.SetDumpsInPageAsync(dumpsInPage.IsChecked);
         kinds.Items.Add(dumpsInPage);
         kinds.Items.Add(unsupported);
         captureKinds.Flyout = kinds;
@@ -159,14 +159,26 @@ internal sealed partial class DumpsWindow : FlockWindow
         rendering = false;
         Ui.ShowError(error, viewModel.Error);
 
-        var visible = viewModel.VisibleDumps;
-        Heading = visible.Count == 0 ? "Dumps" : $"Dumps ({visible.Count})";
+        foreach (var (kind, item) in kindItems)
+        {
+            item.IsChecked = !(viewModel.Status?.CaptureOff.Contains(kind) ?? false);
+            item.IsEnabled = capturing && !viewModel.IsBusy;
+        }
+        dumpsInPage.IsChecked = viewModel.Status?.DumpsInPage == true;
+        dumpsInPage.IsEnabled = capturing && !viewModel.IsBusy;
+        var missing = viewModel.Status?.CaptureUnsupported ?? [];
+        unsupported.Text = missing.Count > 0 ? $"Capture unavailable: PHP {string.Join(", ", missing)}" : "";
+        unsupported.Visibility = missing.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var visibleDumps = viewModel.VisibleDumps;
+        var visibleEvents = viewModel.VisibleEvents;
+        var count = visibleDumps.Count + visibleEvents.Count(e => e.Kind != EventKind.Request);
+        Heading = count == 0 ? "Dumps" : $"Dumps ({count})";
 
         if (count == 0)
         {
             UIElement? action = capturing ? null : Ui.AsyncButton("Start Capturing", () => viewModel.SetDumpsAsync(true), accent: true);
             content.Content = Ui.EmptyState(Ui.GlyphBug,
-                viewModel.Dumps.Count == 0 && store.Events.Count == 0 ? "No dumps yet" : "No matching dumps",
+                viewModel.Dumps.Count == 0 && viewModel.Events.Count == 0 ? "No dumps yet" : "No matching dumps",
                 capturing
                     ? "dump() and dd() output, queries, logs, views and jobs from your sites and artisan commands appear here."
                     : "Capture is off — turn it on to collect dump() and dd() output here.",

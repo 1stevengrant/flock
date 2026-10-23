@@ -127,6 +127,22 @@ public sealed class MailLifetimeTests : IDisposable
         Assert.Null(detail.ActionError);
     }
 
+    [Fact]
+    public async Task MailEnvironmentTracksPortChangesAndSurvivesAnUnavailableHint()
+    {
+        await using var service = new MailService(client, new OperationRunner());
+        handler.Env = "MAIL_PORT=2525";
+        await service.RefreshAsync();
+        Assert.Equal(handler.Env, service.Env);
+        handler.Env = "MAIL_PORT=2526";
+        await service.RefreshAsync();
+        Assert.Equal(handler.Env, service.Env);
+        handler.FailServices = true;
+        await service.RefreshAsync();
+        Assert.Equal(handler.Env, service.Env);
+        Assert.Null(service.Error);
+    }
+
     private sealed class FakeMailPlatform : IMailPlatform
     {
         public string? Path { get; set; }
@@ -158,12 +174,19 @@ public sealed class MailLifetimeTests : IDisposable
         public bool BlockOldDetail { get; set; }
         public bool BlockRaw { get; set; }
         public bool BlockFirstList { get; set; }
+        public string Env { get; set; } = "";
+        public bool FailServices { get; set; }
         private int listReads;
         private int rawReads;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/services")
+            {
+                return FailServices ? Json("{}", HttpStatusCode.ServiceUnavailable)
+                    : Json(FlockJson.Encode(new[] { new Service { Id = "mail", Env = Env } }));
+            }
             if (path == "/v1/mail" && request.Method == HttpMethod.Get)
             {
                 if (FailClear)

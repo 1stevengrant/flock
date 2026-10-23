@@ -84,7 +84,7 @@ internal sealed class Screenshots(Screenshots.Options options)
             var file = Path.Combine(options.Out, $"{shot.Id}-windows-{options.Theme}.png");
             try
             {
-                await app.Model.RefreshAsync();
+                await app.State.RefreshAsync();
                 var window = await shot.Show(app);
                 var hwnd = Microsoft.UI.Win32Interop.GetWindowFromWindowId(window.AppWindow.Id);
                 Capture.Prepare(hwnd);
@@ -105,9 +105,9 @@ internal sealed class Screenshots(Screenshots.Options options)
             }
             finally
             {
-                app.CloseScreenshotWindows();
+                await app.CloseScreenshotWindowsAsync();
             }
         }
-        app.Exit();
+        await app.QuitAsync();
     }
 }

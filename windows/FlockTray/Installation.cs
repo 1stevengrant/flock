@@ -50,23 +50,24 @@ public static class Installation
     /// </summary>
     public static string? InstalledHash()
     {
-        return File.Exists(FlockPaths.FlockBinary) ? Hash(FlockPaths.FlockBinary) : null;
+        return BundledFlock is { } bundled && File.Exists(FlockPaths.FlockBinary) && Hash(FlockPaths.FlockBinary) is { Length: > 0 } hash
+            && hash == Hash(bundled) ? hash : null;
     }
 
     /// <summary>
     /// Asks the bundled CLI which other programs use Flock's ports. Empty when there are none, and
     /// when the check itself fails: `flock install` checks again and reports them.
     /// </summary>
-    public static async Task<List<Conflict>> ConflictsAsync()
+    public static async Task<List<Conflict>> ConflictsAsync(Infrastructure.CliProcessRunner runner)
     {
         if (BundledFlock is not { } bundled)
         {
             return [];
         }
-        var result = await RunFlockAsync(bundled, ["conflicts", "--json"]);
+        var result = await runner.RunAsync(bundled, ["conflicts", "--json"], TimeSpan.FromSeconds(30));
         try
         {
-            return result.Ok ? FlockJson.Decode<ConflictList>(result.Output).Conflicts : [];
+            return result.Succeeded ? FlockJson.Decode<ConflictList>(result.Output).Conflicts : [];
         }
         catch (System.Text.Json.JsonException)
         {

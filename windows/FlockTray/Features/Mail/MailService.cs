@@ -10,6 +10,7 @@ public sealed class MailService : IAsyncDisposable
     private readonly FlockClient client;
     private readonly OperationRunner operations;
     private readonly SharedRead<List<MailSummary>> request;
+    private readonly SharedRead<List<Service>> environmentRequest;
     private readonly OperationErrors errors = new();
     private readonly object gate = new();
     private List<MailSummary> current = [];
@@ -21,11 +22,13 @@ public sealed class MailService : IAsyncDisposable
         this.client = client;
         this.operations = operations;
         request = new SharedRead<List<MailSummary>>(dispatcher);
+        environmentRequest = new SharedRead<List<Service>>(dispatcher);
         errors.PropertyChanged += ErrorsChanged;
         operations.RunningChanged += RunningChanged;
     }
 
     public IReadOnlyList<MailSummary> Messages => current;
+    public string Env { get; private set; } = "";
     public string? RefreshError => errors.Refresh;
     public string? ActionError => errors.Action;
     public string? Error => errors.DisplayedMessage;
@@ -43,11 +46,19 @@ public sealed class MailService : IAsyncDisposable
         return new Visibility(this);
     }
 
-    public Task RefreshAsync(CancellationToken observerToken = default) => request.JoinReadAsync(
-        client.MailAsync,
-        Apply,
-        PublishRefreshFailure,
-        observerToken);
+    public async Task RefreshAsync(CancellationToken observerToken = default)
+    {
+        await request.JoinReadAsync(client.MailAsync, Apply, PublishRefreshFailure, observerToken);
+        await environmentRequest.JoinReadAsync(client.ServicesAsync, services =>
+        {
+            var value = services.FirstOrDefault(service => service.Id == "mail")?.Env ?? Env;
+            if (value != Env)
+            {
+                Env = value;
+                Changed?.Invoke();
+            }
+        }, _ => { }, observerToken);
+    }
 
     public Task RefreshIfVisibleAsync(CancellationToken observerToken = default)
     {
@@ -111,6 +122,7 @@ public sealed class MailService : IAsyncDisposable
         operations.RunningChanged -= RunningChanged;
         errors.PropertyChanged -= ErrorsChanged;
         await request.DisposeAsync();
+        await environmentRequest.DisposeAsync();
     }
 
     private void Apply(List<MailSummary> value)

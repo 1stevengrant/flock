@@ -10,6 +10,9 @@ public sealed class InstallationService(CliProcessRunner processRunner, Preferen
     private readonly object gate = new();
     private Task<Installation.Result>? setup;
 
+    public bool IsInstalling => setup is { IsCompleted: false };
+    public Task<List<Conflict>> ConflictsAsync() => Installation.ConflictsAsync(processRunner);
+
     public Task<Installation.Result> InstallAsync(Action<string>? onLine = null, CancellationToken cancellationToken = default, bool retry = false)
     {
         lock (gate)
@@ -30,6 +33,7 @@ public sealed class InstallationService(CliProcessRunner processRunner, Preferen
             return new Installation.Result(false, "This build of Flock has no bundled CLI — run `flock install` in a terminal.");
         }
         var result = await processRunner.RunAsync(bundled, ["install"], cancellationToken: cancellationToken);
+        await RecordInstalledAsync(cancellationToken);
         if (result.Output.Length > 0)
         {
             foreach (var line in result.Output.Split('\n'))

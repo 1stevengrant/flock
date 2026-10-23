@@ -92,6 +92,7 @@ public sealed class ConfigurationService : IAsyncDisposable
     private static bool Same(FlockConfig left, FlockConfig right) =>
         left.Tld == right.Tld && left.DefaultPhp == right.DefaultPhp && left.DefaultNode == right.DefaultNode &&
         left.Xdebug == right.Xdebug && left.Dumps == right.Dumps && left.Channel == right.Channel && left.Root == right.Root &&
+        left.DumpsInPage == right.DumpsInPage && left.CaptureOff.SequenceEqual(right.CaptureOff) &&
         left.Ports.Http == right.Ports.Http && left.Ports.Https == right.Ports.Https && left.Ports.Dns == right.Ports.Dns &&
         left.Ports.Smtp == right.Ports.Smtp && left.Ports.Postgres == right.Ports.Postgres && left.Ports.Valkey == right.Ports.Valkey &&
         left.Ports.Dumps == right.Ports.Dumps && left.Ports.Api == right.Ports.Api &&

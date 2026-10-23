@@ -20,6 +20,7 @@ internal sealed partial class MailWindow : FlockWindow
     private readonly InfoBar error = Ui.ErrorBar();
     private readonly AppBarButton clear;
     private MailDetailView? detailView;
+    private bool rendering;
 
     private readonly Task initialRefresh;
 
@@ -35,7 +36,13 @@ internal sealed partial class MailWindow : FlockWindow
         toolbar.PrimaryCommands.Add(refresh);
         toolbar.PrimaryCommands.Add(clear);
 
-        list.SelectionChanged += async (_, _) => await ShowDetailAsync((list.SelectedItem as MailViewModel.MailRow)?.Id);
+        list.SelectionChanged += async (_, _) =>
+        {
+            if (!rendering)
+            {
+                await ShowDetailAsync((list.SelectedItem as ListViewItem)?.Tag as string);
+            }
+        };
         listArea.Children.Add(list);
 
         var split = new Grid { ColumnSpacing = 0 };
@@ -77,12 +84,18 @@ internal sealed partial class MailWindow : FlockWindow
         Ui.ShowError(error, viewModel.Error);
         clear.IsEnabled = viewModel.CanClear;
 
+        rendering = true;
         list.Items.Clear();
         foreach (var message in viewModel.Messages)
         {
-            list.Items.Add(Row(message));
+            list.Items.Add(new ListViewItem { Content = Row(message), Tag = message.Id });
         }
-        list.SelectedItem = viewModel.Messages.FirstOrDefault(row => row.Id == viewModel.SelectedId);
+        list.SelectedItem = list.Items.Cast<ListViewItem>().FirstOrDefault(row => (string)row.Tag == viewModel.SelectedId);
+        rendering = false;
+        if (viewModel.SelectedId is null)
+        {
+            detail.Content = NoSelection();
+        }
 
         listArea.Children.Clear();
         listArea.Children.Add(list);
@@ -98,15 +111,14 @@ internal sealed partial class MailWindow : FlockWindow
     /// </summary>
     private StackPanel NoSelection()
     {
-        shownEnv = store.Env;
-        if (store.Env.Length == 0)
+        if (viewModel.Env.Length == 0)
         {
             return Ui.EmptyState(Ui.GlyphMail, "No message selected");
         }
         var note = Ui.Caption("MAIL_USERNAME picks the inbox, so every project gets its own.");
         note.TextAlignment = TextAlignment.Center;
         return Ui.EmptyState(Ui.GlyphMail, "Catch your app's mail", "Add these lines to your project's .env:",
-            Ui.Column(8, Ui.CodeBlock(store.Env), note));
+            Ui.Column(8, Ui.CodeBlock(viewModel.Env), note));
     }
 
     private static StackPanel Row(MailViewModel.MailRow message)
@@ -155,7 +167,7 @@ internal sealed partial class MailWindow : FlockWindow
         {
             if (viewModel.SelectedId == id)
             {
-                detail.Content = Ui.EmptyState(Ui.GlyphMail, "No message selected");
+                detail.Content = NoSelection();
             }
             return;
         }

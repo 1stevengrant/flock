@@ -280,7 +280,7 @@ public sealed class FlockClient : IDisposable
     // Events: queries, logs, views, jobs and requests captured next to the dumps
 
     /// <summary>Newest first; kinds (EventKind values) and limit narrow the list.</summary>
-    public Task<List<RuntimeEvent>> EventsAsync(IEnumerable<string>? kinds = null, int? limit = null)
+    public Task<List<RuntimeEvent>> EventsAsync(IEnumerable<string>? kinds = null, int? limit = null, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (kinds?.ToList() is { Count: > 0 } list)
@@ -291,10 +291,10 @@ public sealed class FlockClient : IDisposable
         {
             query.Add($"limit={n}");
         }
-        return Get<List<RuntimeEvent>>("/v1/events" + (query.Count == 0 ? "" : "?" + string.Join("&", query)));
+        return Get<List<RuntimeEvent>>("/v1/events" + (query.Count == 0 ? "" : "?" + string.Join("&", query)), cancellationToken);
     }
 
-    public async Task ClearEventsAsync() => await Raw(HttpMethod.Delete, "/v1/events");
+    public async Task ClearEventsAsync(CancellationToken cancellationToken = default) => await Raw(HttpMethod.Delete, "/v1/events", cancellationToken: cancellationToken);
 
     // Logs
 

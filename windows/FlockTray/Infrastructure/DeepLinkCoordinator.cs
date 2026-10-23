@@ -44,7 +44,7 @@ public sealed class DeepLinkCoordinator(RuntimeService model)
     public async Task<InstallLinkResolution?> ConsumeInstallAsync(CancellationToken cancellationToken = default)
     {
         var link = model.PendingInstall;
-        if (link is null)
+        if (link is null || link.Service is InstallLink.Php or InstallLink.Node)
         {
             return null;
         }

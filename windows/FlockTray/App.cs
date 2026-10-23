@@ -87,6 +87,10 @@ public sealed partial class App : Application, IXamlMetadataProvider
             uiDispatcher = host.GetService<IUiDispatcher>();
             trayFactory = host.GetService<ITrayIconFactory>();
             panelFactory = host.GetService<IPanelWindowFactory>();
+#if SCREENSHOTS
+            Screenshots.Current.Start(this);
+            return;
+#else
 
             tray = trayFactory is null
                 ? throw new InvalidOperationException("The tray icon factory is unavailable.")
@@ -113,6 +117,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
             {
                 ShowMain();
             }
+#endif
         }
         catch (Exception error)
         {
@@ -155,7 +160,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     private void UpdateTrayCore()
     {
         var tooltip = "Flock — " + State.Headline;
-        if (State.Status is { Warnings.Count: > 0 } status && !Model.NeedsSetup)
+        if (State.Status is { Warnings.Count: > 0 } status && !State.NeedsSetup)
         {
             tooltip += "\n" + status.Warnings[0];
         }

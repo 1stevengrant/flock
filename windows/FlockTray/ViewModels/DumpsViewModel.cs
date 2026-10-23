@@ -25,6 +25,7 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
         preferences.Changed += PreferencesChanged;
         preferences.ErrorChanged += NotifyState;
         model.Changed += NotifyState;
+        model.Configuration.Changed += NotifyState;
         SetDumpsCommand = new AsyncRelayCommand<bool>(SetDumpsAsync, _ => !service.IsCaptureBusy);
         ClearCommand = new AsyncRelayCommand(ClearAsync, () => CanClear);
     }
@@ -34,20 +35,23 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
     }
 
     public IReadOnlyList<Dump> Dumps => service.Dumps;
+    public IReadOnlyList<RuntimeEvent> Events => service.Events;
     public RuntimeService Model => model ?? throw new InvalidOperationException("The dump view model has no runtime owner.");
     public Status? Status => model?.Status;
     public IReadOnlyList<Dump> VisibleDumps =>
-        DumpTimeline.Filter(LatestOnly ? DumpTimeline.LatestGroup(service.Dumps) : service.Dumps, Query);
+        DumpTimeline.Filter(LatestOnly ? DumpTimeline.LatestGroup(service.Dumps, service.Events).Dumps : service.Dumps, Query);
+    public IReadOnlyList<RuntimeEvent> VisibleEvents =>
+        DumpTimeline.Filter(LatestOnly ? DumpTimeline.LatestGroup(service.Dumps, service.Events).Events : service.Events.Where(e => e.IsKnown).ToList(), Query);
     public string? Header => service.Header;
     public bool HeaderMissing => service.HeaderMissing;
     public bool Capturing => model?.Status?.Dumps == true;
     public int Count => model?.Status?.DumpCount ?? service.Dumps.Count;
     public string Editor => preferences.Snapshot.Editor;
     public bool LatestOnly => preferences.Snapshot.DumpsLatestOnly;
-    public string? Error => service.Error ?? preferences.Error ?? model?.ActionError;
+    public string? Error => service.Error ?? preferences.Error ?? model?.Configuration.Error ?? model?.ActionError;
     public string? ActionError => service.ActionError ?? preferences.ActionError ?? model?.ActionError;
     public bool IsBusy => service.IsClearing || service.IsCaptureBusy;
-    public bool CanClear => service.Dumps.Count > 0 && !service.IsClearing;
+    public bool CanClear => (service.Dumps.Count > 0 || service.Events.Count > 0) && !service.IsClearing;
 
     public string Query
     {
@@ -57,6 +61,7 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
             if (SetProperty(ref query, value ?? ""))
             {
                 OnPropertyChanged(nameof(VisibleDumps));
+                OnPropertyChanged(nameof(VisibleEvents));
             }
         }
     }
@@ -65,6 +70,18 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
     public IAsyncRelayCommand ClearCommand { get; }
 
     public Task SetDumpsAsync(bool enabled) => service.SetCaptureAsync(enabled);
+
+    public Task SetCaptureAsync(string kind, bool enabled)
+    {
+        var off = (Status?.CaptureOff ?? []).Where(value => value != kind).ToList();
+        if (!enabled)
+        {
+            off.Add(kind);
+        }
+        return Model.Configuration.UpdateAsync(new SettingsChange(CaptureOff: off));
+    }
+
+    public Task SetDumpsInPageAsync(bool enabled) => Model.Configuration.UpdateAsync(new SettingsChange(DumpsInPage: enabled));
 
     public Task RefreshAsync(CancellationToken cancellationToken = default) => service.RefreshAsync(cancellationToken);
 
@@ -85,6 +102,7 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
         service.DismissError();
         preferences.DismissError();
         model?.DismissError();
+        model?.Configuration.DismissError();
     }
 
     public void Dispose()
@@ -100,6 +118,7 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
         if (model is not null)
         {
             model.Changed -= NotifyState;
+            model.Configuration.Changed -= NotifyState;
         }
         visibility?.Dispose();
         visibility = null;
@@ -117,6 +136,8 @@ public sealed class DumpsViewModel : ObservableObject, IDisposable
     private void NotifyState()
     {
         OnPropertyChanged(nameof(Dumps));
+        OnPropertyChanged(nameof(Events));
+        OnPropertyChanged(nameof(VisibleEvents));
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(VisibleDumps));
         OnPropertyChanged(nameof(Header));

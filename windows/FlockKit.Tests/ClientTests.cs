@@ -69,6 +69,24 @@ public class ClientTests : IDisposable
     }
 
     [Fact]
+    public async Task ListsAndClearsEvents()
+    {
+        var handler = new Handler(request => request.Method == HttpMethod.Delete
+            ? new HttpResponseMessage(HttpStatusCode.NoContent)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null") });
+        using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:53531", "secret"));
+
+        Assert.Empty(await client.EventsAsync());
+        Assert.Empty(await client.EventsAsync([EventKind.Query, EventKind.Log], limit: 50));
+        await client.ClearEventsAsync();
+
+        Assert.Equal("http://127.0.0.1:53531/v1/events", handler.Requests[0].RequestUri?.ToString());
+        Assert.Equal("http://127.0.0.1:53531/v1/events?kind=query%2Clog&limit=50", handler.Requests[1].RequestUri?.ToString());
+        Assert.Equal((HttpMethod.Delete, "/v1/events"), (handler.Requests[2].Method, handler.Requests[2].RequestUri?.AbsolutePath));
+    }
+
+    [Fact]
     public async Task RereadsApiJsonAfterUnauthorized()
     {
         var path = WriteApiJson("http://127.0.0.1:1", "old");

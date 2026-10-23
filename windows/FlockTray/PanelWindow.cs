@@ -24,7 +24,7 @@ internal sealed partial class PanelWindow : Window
     private readonly PanelViewModel viewModel;
     private readonly IntPtr hwnd;
     private readonly ScrollViewer scroller = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-    private readonly StackPanel root = new() { Spacing = 12, Padding = new Thickness(16), Width = Width };
+    private readonly StackPanel root = new() { Spacing = 12, Padding = new Thickness(16) };
     private readonly ContentControl headerSlot = new();
     private readonly ContentControl updateSlot = new();
     private readonly ContentControl errorSlot = new();
@@ -285,9 +285,8 @@ internal sealed partial class PanelWindow : Window
     private static StackPanel Warnings(List<string> warnings)
     {
         var panel = Ui.Column(4);
-        foreach (var warning in warnings)
+        foreach (var text in warnings.Select(warning => Ui.Caption(warning, Ui.Caution)))
         {
-            var text = Ui.Caption(warning, Ui.Caution);
             panel.Children.Add(Ui.Row(6, Ui.Icon(Ui.GlyphWarning, 12, Ui.Caution), text));
             text.MaxWidth = Width - 54;
         }

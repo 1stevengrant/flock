@@ -118,7 +118,17 @@ internal sealed class GeneralPane(SettingsWindow window, RuntimeService model) :
         var control = idle ? (UIElement)button : Ui.Row(12, new ProgressRing { Width = 16, Height = 16 }, button);
         if (updater.Available is { } available && (available.Notes.Length > 0 || available.NotesUrl is not null) && idle)
         {
-            control = Ui.Row(12, Ui.Link("Release Notes", () => Model.Open(notes)), button);
+            control = Ui.Row(12, Ui.Link("Release Notes", async () =>
+            {
+                if (available.Notes.Length > 0)
+                {
+                    await ReleaseNotesAsync(available);
+                }
+                else if (available.NotesUrl is { } url)
+                {
+                    Model.Open(url);
+                }
+            }), button);
         }
         return Ui.Setting("Flock", description, control);
     }
@@ -126,8 +136,8 @@ internal sealed class GeneralPane(SettingsWindow window, RuntimeService model) :
     /// <summary>An update's release notes, like Sparkle's update window on macOS: install it from here, or read it on GitHub.</summary>
     private async Task ReleaseNotesAsync(UpdateFeed.Item update)
     {
-        var notes = new HtmlView(blockRemote: false) { Width = 500, Height = 380 };
-        notes.Load(ReleaseNotesPage(update.Notes));
+        var notes = new HtmlView(allowScripts: false, blockRemote: false, whiteBackground: false, shell: Model.Shell) { Width = 500, Height = 380 };
+        var load = notes.LoadAsync(ReleaseNotesPage(update.Notes));
         var dialog = new ContentDialog
         {
             Title = $"Flock {update.Version}",
@@ -140,13 +150,23 @@ internal sealed class GeneralPane(SettingsWindow window, RuntimeService model) :
         };
         // Wide enough for the notes; the default caps the dialog at 548 pixels.
         dialog.Resources["ContentDialogMaxWidth"] = 600.0;
-        switch (await dialog.ShowAsync())
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            await load;
+            await notes.ReleaseAsync();
+        }
+        switch (result)
         {
             case ContentDialogResult.Primary:
-                await Model.Updater.InstallAsync();
+                await Model.UpdateService.InstallAsync();
                 break;
             case ContentDialogResult.Secondary:
-                Native.Open(update.NotesUrl!);
+                Model.Open(update.NotesUrl!);
                 break;
         }
     }

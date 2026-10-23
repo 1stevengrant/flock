@@ -129,7 +129,7 @@ internal sealed class SetupWindow : FlockWindow
     private async Task RunAsync(bool retry = false)
     {
         Render(Stage.Checking);
-        conflicts = ConflictingApp.Group(await Installation.ConflictsAsync());
+        conflicts = ConflictingApp.Group(await model.Installation.ConflictsAsync());
         if (conflicts.Count > 0)
         {
             Render(Stage.Conflicts);
@@ -151,8 +151,16 @@ internal sealed class SetupWindow : FlockWindow
         model.NeedsSetup = !await model.Installation.IsSetUpAsync();
         if (result.Ok)
         {
-            await model.Installation.RecordInstalledAsync();
+            try
+            {
+                Native.StartsAtSignIn = startup.IsChecked == true;
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+            {
+                startupProblem = $"Could not change the startup setting: {e.Message}. Settings → General has it too.";
+            }
         }
+        model.NotifyChanged();
         Render(result.Ok ? Stage.Done : Stage.Failed);
         await model.RefreshAsync();
     }

@@ -116,6 +116,47 @@ public sealed class DumpsServiceTests : IDisposable
         Assert.Equal(OperationOutcome.Succeeded, await first);
     }
 
+    [Fact]
+    public async Task RuntimeEventsAreLoadedAndClearedWithDumps()
+    {
+        handler.Events = "[{\"id\":\"query-1\",\"kind\":\"query\",\"group\":\"g\",\"sql\":\"select 1\"}]";
+        await using var service = new DumpsService(client, new OperationRunner());
+        await service.RefreshAsync();
+        Assert.Equal("query-1", Assert.Single(service.Events).Id);
+
+        Assert.Equal(OperationOutcome.Succeeded, await service.ClearAsync());
+
+        Assert.Empty(service.Events);
+        Assert.Equal(1, handler.EventDeletes);
+        Assert.Null(service.Error);
+    }
+
+    [Fact]
+    public async Task OlderDaemonWithoutEventsStillSupportsDumps()
+    {
+        handler.MissingEvents = true;
+        await using var service = new DumpsService(client, new OperationRunner());
+        await service.RefreshAsync();
+        Assert.Single(service.Dumps);
+        Assert.Empty(service.Events);
+        Assert.Null(service.Error);
+        Assert.Equal(OperationOutcome.Succeeded, await service.ClearAsync());
+        Assert.Null(service.Error);
+    }
+
+    [Fact]
+    public async Task EventClearFailureSurvivesSuccessfulListRefreshes()
+    {
+        handler.Events = "[{\"id\":\"query-1\",\"kind\":\"query\"}]";
+        handler.FailEventClear = true;
+        await using var service = new DumpsService(client, new OperationRunner());
+        await service.RefreshAsync();
+        Assert.Equal(OperationOutcome.Failed, await service.ClearAsync());
+        await service.RefreshAsync();
+        Assert.Single(service.Events);
+        Assert.Equal("event clear failed", service.ActionError);
+    }
+
     private sealed class DumpsHandler : HttpMessageHandler
     {
         public TaskCompletionSource FirstListStarted { get; } = Signal();
@@ -129,11 +170,33 @@ public sealed class DumpsServiceTests : IDisposable
         public bool FailHeader { get; set; }
         public bool FailCapture { get; set; }
         public bool BlockCapture { get; set; }
+        public string Events { get; set; } = "[]";
+        public bool MissingEvents { get; set; }
+        public bool FailEventClear { get; set; }
+        public int EventDeletes { get; private set; }
         private int listReads;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/events")
+            {
+                if (MissingEvents)
+                {
+                    return Json("{}", HttpStatusCode.NotFound);
+                }
+                if (request.Method == HttpMethod.Get)
+                {
+                    return Json(Events);
+                }
+                EventDeletes++;
+                if (FailEventClear)
+                {
+                    return Json("{\"error\":\"event clear failed\"}", HttpStatusCode.BadRequest);
+                }
+                Events = "[]";
+                return Json("{}");
+            }
             if (path == "/v1/dumps" && request.Method == HttpMethod.Get)
             {
                 if (Interlocked.Increment(ref listReads) == 1)

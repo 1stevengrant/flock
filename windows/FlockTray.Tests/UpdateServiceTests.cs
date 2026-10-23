@@ -136,7 +136,8 @@ public sealed class UpdateServiceTests : IDisposable
         Assert.True(shutdown.Requested);
         Assert.Empty(cleanup.Paths);
         Assert.False(service.IsBusy);
-        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH"], launcher.Arguments);
+        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH"], launcher.Arguments.Take(4));
+        Assert.StartsWith("/RESULT=", launcher.Arguments[4]);
     }
 
     [Fact]
@@ -147,6 +148,49 @@ public sealed class UpdateServiceTests : IDisposable
         Assert.Equal(OperationOutcome.Rejected, await service.CheckAsync(userInitiated: true));
         Assert.Equal(0, handler.FeedRequests);
         Assert.Null(service.ActionError);
+    }
+
+    [Fact]
+    public async Task InstallRereadsTheFeedAndUsesTheNewRelease()
+    {
+        handler.Feed = Feed("1.1.0", "stable", 3);
+        await service.CheckAsync(userInitiated: true);
+        handler.Feed = Feed("1.2.0", "stable", 3);
+
+        Assert.Equal(OperationOutcome.Succeeded, await service.InstallAsync());
+
+        Assert.Equal(2, handler.FeedRequests);
+        Assert.Contains("1.2.0", launcher.FileName);
+    }
+
+    [Fact]
+    public async Task FailedFeedRecheckDoesNotInstallTheStaleRelease()
+    {
+        handler.Feed = Feed("1.1.0", "stable", 3);
+        await service.CheckAsync(userInitiated: true);
+        handler.Fail = true;
+
+        Assert.Equal(OperationOutcome.Failed, await service.InstallAsync());
+        Assert.False(launcher.Called);
+        Assert.False(shutdown.Requested);
+    }
+
+    [Fact]
+    public async Task DeclinedInstallerKeepsAppRunningAndShowsItsResult()
+    {
+        handler.Feed = Feed("1.1.0", "stable", 3);
+        await service.CheckAsync(userInitiated: true);
+        launcher.ExitCode = 5;
+        launcher.ResultMessage = "Administrator permission was declined.";
+
+        Assert.Equal(OperationOutcome.Failed, await service.InstallAsync());
+
+        Assert.False(shutdown.Requested);
+        Assert.Equal(UpdatePhase.Idle, service.State);
+        Assert.Equal(launcher.ResultMessage, service.ActionError);
+        handler.Feed = Feed("1.2.0", "stable", 3);
+        await service.CheckAsync(userInitiated: false);
+        Assert.Equal(launcher.ResultMessage, service.ActionError);
     }
 
     [Fact]
@@ -264,12 +308,20 @@ public sealed class UpdateServiceTests : IDisposable
         public bool Result { get; set; } = true;
         public bool Called { get; private set; }
         public IReadOnlyList<string> Arguments { get; private set; } = [];
+        public string FileName { get; private set; } = "";
+        public int ExitCode { get; set; }
+        public string? ResultMessage { get; set; }
 
-        public bool LaunchDetached(string fileName, IReadOnlyList<string> arguments)
+        public Task<CliProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments)
         {
             Called = true;
+            FileName = fileName;
             Arguments = [.. arguments];
-            return Result;
+            if (ResultMessage is not null)
+            {
+                File.WriteAllText(arguments.Single(argument => argument.StartsWith("/RESULT=", StringComparison.Ordinal))[8..], ResultMessage);
+            }
+            return Task.FromResult(new CliProcessResult(Result, Result ? ExitCode : -1, ""));
         }
     }
 

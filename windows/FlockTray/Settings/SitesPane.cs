@@ -23,6 +23,8 @@ internal sealed partial class SitesPane : Pane
     private readonly StackPanel siteList = new() { Spacing = 4, Margin = new Thickness(0, 0, 14, 8) };
     private readonly KeyedRowsBinding<string, SiteRowViewModel> listBinding;
     private Grid? retainedRoot;
+    private Grid? sitesLayout;
+    private bool building;
     private Task pendingSecure = Task.CompletedTask;
     private bool active;
     private CancellationTokenSource? activeLifetime;
@@ -190,7 +192,7 @@ internal sealed partial class SitesPane : Pane
 
     private void UpdateRetained()
     {
-        if (retainedRoot is not null)
+        if (retainedRoot is not null && !building)
         {
             Build();
         }
@@ -198,14 +200,19 @@ internal sealed partial class SitesPane : Pane
 
     public override UIElement Build()
     {
-        if (listScroller.Parent is Panel oldList)
+        building = true;
+        try
         {
-            oldList.Children.Remove(listScroller);
+            return BuildCore();
         }
-        if (detailScroller.Parent is Panel oldDetail)
+        finally
         {
-            oldDetail.Children.Remove(detailScroller);
+            building = false;
         }
+    }
+
+    private UIElement BuildCore()
+    {
         viewModel.Apply(Model.Status);
         var sites = Model.Status?.Sites ?? [];
 
@@ -226,37 +233,31 @@ internal sealed partial class SitesPane : Pane
         var selected = selectedRow?.Snapshot ?? sites[0];
 
         listBinding.Synchronize(viewModel.Sites);
-        add.Margin = new Thickness(0, 0, 0, 12);
-        var left = new Grid();
-        left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        left.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        left.Children.Add(add);
-        listScroller.Content = siteList;
-        Grid.SetRow(listScroller, 1);
-        left.Children.Add(listScroller);
-
-        // A fixed list and the details in the rest, as in Services.
-        var grid = new Grid { ColumnSpacing = 16 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 340 });
-        grid.Children.Add(left);
+        if (sitesLayout is null)
+        {
+            add.Margin = new Thickness(0, 0, 0, 12);
+            var left = new Grid();
+            left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            left.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            left.Children.Add(add);
+            listScroller.Content = siteList;
+            Grid.SetRow(listScroller, 1);
+            left.Children.Add(listScroller);
+            sitesLayout = new Grid { ColumnSpacing = 16 };
+            sitesLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
+            sitesLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 340 });
+            sitesLayout.Children.Add(left);
+            Grid.SetColumn(detailScroller, 1);
+            sitesLayout.Children.Add(detailScroller);
+        }
         var detail = Detail(selected, selectedRow);
         detail.Margin = new Thickness(0, 0, 14, 8);
         detailScroller.Content = detail;
-        Grid.SetColumn(detailScroller, 1);
-        grid.Children.Add(detailScroller);
-        if (retainedRoot is null)
-        {
-            retainedRoot = grid;
-        }
-        else
+        retainedRoot ??= new Grid();
+        if (!retainedRoot.Children.Contains(sitesLayout))
         {
             retainedRoot.Children.Clear();
-            foreach (var child in grid.Children.ToList())
-            {
-                grid.Children.Remove(child);
-                retainedRoot.Children.Add(child);
-            }
+            retainedRoot.Children.Add(sitesLayout);
         }
         return retainedRoot;
     }

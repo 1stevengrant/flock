@@ -45,6 +45,7 @@ public sealed class MailViewModel : ObservableObject, IAsyncDisposable
     public bool IsClearing => service.IsClearing;
     public bool CanClear => rows.Count > 0 && !service.IsClearing;
     public string SmtpAddress => model.Status?.Mail is { Length: > 0 } value ? value : "127.0.0.1:2525";
+    public string Env => service.Env;
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand ClearCommand { get; }
 

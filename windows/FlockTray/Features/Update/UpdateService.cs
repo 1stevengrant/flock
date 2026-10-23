@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -24,12 +25,28 @@ public sealed class UpdateInstallationMetadata : IUpdateInstallationMetadata
 
 public interface IUpdateProcessLauncher
 {
-    bool LaunchDetached(string fileName, IReadOnlyList<string> arguments);
+    Task<CliProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments);
 }
 
-public sealed class UpdateProcessLauncher(CliProcessRunner processRunner) : IUpdateProcessLauncher
+public sealed class UpdateProcessLauncher : IUpdateProcessLauncher
 {
-    public bool LaunchDetached(string fileName, IReadOnlyList<string> arguments) => processRunner.LaunchDetached(fileName, arguments);
+    public async Task<CliProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments)
+    {
+        var start = new ProcessStartInfo(fileName) { UseShellExecute = true };
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(start);
+        if (process is null)
+        {
+            return new CliProcessResult(false, -1, "The verified installer could not be started.");
+        }
+        // Setup kills this app only after its privileged preflight succeeds. A declined UAC prompt
+        // returns here with the existing app still running. Do not cancel or kill the installer.
+        await process.WaitForExitAsync();
+        return new CliProcessResult(true, process.ExitCode, "");
+    }
 }
 
 public interface IUpdateFileCleanup
@@ -278,7 +295,7 @@ public sealed class UpdateService
         {
             return Task.FromResult(OperationOutcome.Rejected);
         }
-        return RunOperationAsync(InstallCoreAsync, cancellationToken, action: true);
+        return RunOperationAsync(CheckAndInstallCoreAsync, cancellationToken, action: true);
     }
 
     public void DismissError()
@@ -387,9 +404,14 @@ public sealed class UpdateService
             await DownloadAsync(files, update, cancellationToken);
             await verifier.VerifyAsync(files.Installer, update, cancellationToken);
             await SetStateAsync(UpdatePhase.Installing);
-            if (!processLauncher.LaunchDetached(files.Installer, ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH"]))
+            var resultPath = files.Installer + ".result.txt";
+            File.Delete(resultPath);
+            var result = await processLauncher.RunAsync(files.Installer,
+                ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH", $"/RESULT={resultPath}"]);
+            if (!result.Succeeded)
             {
-                throw new InvalidOperationException("The verified installer could not be started.");
+                var message = File.Exists(resultPath) ? (await File.ReadAllTextAsync(resultPath)).Trim() : result.Output;
+                throw new InvalidOperationException(message.Length > 0 ? message : $"The update was not installed (setup exited with code {result.ExitCode}).");
             }
             transferred = true;
             ownershipTransferred = true;

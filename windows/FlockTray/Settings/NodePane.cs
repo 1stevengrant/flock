@@ -13,6 +13,34 @@ namespace Flock.Tray;
 internal sealed class NodePane(SettingsWindow window, RuntimeService model) : Pane(window, model)
 {
     private readonly NodePaneViewModel rows = new(model.Node);
+    private string? installingDefault;
+    private string? DefaultInstalling =>
+        Model.Status?.Defaults?.Node is { IsInstalling: true, Version.Length: > 0 } node ? node.Version : null;
+
+    private string? Step(NodeRelease release) => Model.Node.IsRunning(release.Major) ? "Working…"
+        : release.Major == DefaultInstalling && !release.IsInstalled ? $"Downloading Node.js {release.Latest}…" : null;
+
+    private void ConfirmPendingLink()
+    {
+        var installing = (Model.Node.Current?.Versions ?? []).Where(release => Step(release) is not null).Select(release => release.Major).ToList();
+        if (Model.PendingInstall is not { Service: InstallLink.Node } link || link.ResolveNode(Model.Node.Current, installing) is not { } request)
+        {
+            return;
+        }
+        Model.PendingInstall = null;
+        Window.DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (request.Target is not { } target)
+            {
+                await Ui.Inform(Window.Content.XamlRoot, request.Title, request.Message);
+                return;
+            }
+            if (await Window.Confirm(request.Title, request.Message, "Install"))
+            {
+                await Model.Node.InstallAsync(target.Line);
+            }
+        });
+    }
     public override string Title => "Node";
     public override string Subtitle => "node, npm and npx follow the project's .nvmrc / .node-version, then the site's version, then the default.";
 
@@ -37,7 +65,7 @@ internal sealed class NodePane(SettingsWindow window, RuntimeService model) : Pa
         var installing = DefaultInstalling;
         if (installingDefault is not null && installing != installingDefault)
         {
-            _ = Store.RefreshNodeAsync();
+            _ = Model.Node.RefreshAsync();
         }
         installingDefault = installing;
 
@@ -95,6 +123,10 @@ internal sealed class NodePane(SettingsWindow window, RuntimeService model) : Pa
     /// <summary>The status line under the name.</summary>
     private UIElement Detail(NodeRelease release)
     {
+        if (Step(release) is { } step)
+        {
+            return Ui.Row(6, new ProgressRing { Width = 12, Height = 12 }, Ui.Caption(step, wrap: false));
+        }
         var (status, color) = release switch
         {
             { Update: true } => ("Update available", Ui.Accent),
@@ -117,7 +149,7 @@ internal sealed class NodePane(SettingsWindow window, RuntimeService model) : Pa
     private StackPanel Actions(NodeRelease release)
     {
         var actions = BuildActions(release);
-        Ui.SetEnabled(actions, !Model.Node.IsRunning(release.Major));
+        Ui.SetEnabled(actions, Step(release) is null);
         return actions;
     }
 

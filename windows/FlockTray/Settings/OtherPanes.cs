@@ -152,7 +152,7 @@ internal sealed class AboutPane(SettingsWindow window, RuntimeService model) : P
                 Ui.Setting("Daemon", null, Ui.Text(Model.Status?.Version ?? "not running", foreground: Ui.SecondaryText, wrap: false)),
                 Ui.Setting("Data folder", FlockPaths.Root, Ui.Button("Show in Explorer", () => Model.Reveal(FlockPaths.Root))),
                 Ui.Setting("Flock documentation", null, Ui.Button("Open", () => Model.Open("https://flockphp.com/docs"))),
-                Ui.Setting("Found a bug?", "Opens a new GitHub issue with your versions filled in.", Ui.Button("Report an issue", () => Native.Open(IssueUrl(version.Split('+')[0])))),
+                Ui.Setting("Found a bug?", "Opens a new GitHub issue with your versions filled in.", Ui.Button("Report an issue", () => Model.Open(IssueUrl(version.Split('+')[0])))),
                 Ui.Setting("License", "Copyright © Guava s.r.o. Licensed under the AGPL-3.0.", Ui.Button("View", () => Model.Open("https://github.com/flock-php/flock/blob/main/LICENSE")))),
             Ui.Section("Uninstall",
                 Ui.Setting("Uninstall Flock", "Stops Flock and removes it from this PC. Your sites, databases and settings are kept.",

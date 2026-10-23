@@ -92,8 +92,9 @@ public sealed class RuntimeService
     }
     public bool IsUpdating { get; private set; }
     public string Headline => IsUpdating ? "Updating…"
+        : NeedsSetup ? "Not set up"
         : Status is { } status ? $"{(status.IsDegraded ? "Needs attention" : "Running")} · v{status.Version}"
-        : NeedsSetup ? "Not set up" : "Not running";
+        : "Not running";
     public bool IsRunning => Status is not null;
     public bool IsDegraded => Status?.IsDegraded ?? false;
     public UpdateService UpdateService { get; }
@@ -120,11 +121,7 @@ public sealed class RuntimeService
         NotifyChanged();
         var result = await installation.InstallAsync();
         IsUpdating = false;
-        if (result.Ok)
-        {
-            await installation.RecordInstalledAsync();
-        }
-        else
+        if (!result.Ok)
         {
             App.Log(new InvalidOperationException("flock install (update) failed:\n" + result.Output));
             Native.ShowError("Flock could not update", $"{result.Output}\n\nYou can run `flock install` in a terminal, or reinstall Flock.");
@@ -136,6 +133,20 @@ public sealed class RuntimeService
     public async Task RefreshAsync()
     {
         await statusPolling.RefreshAsync();
+    }
+
+    public async Task RefreshSetupAsync()
+    {
+        if (installation.IsInstalling || IsUpdating || installation.BundledFlock is null)
+        {
+            return;
+        }
+        var needed = !await installation.IsSetUpAsync();
+        if (needed != NeedsSetup && !installation.IsInstalling && !IsUpdating)
+        {
+            NeedsSetup = needed;
+            NotifyChanged();
+        }
     }
 
     public Task SetXdebugAsync(bool enabled) => Configuration.UpdateAsync(new SettingsChange(Xdebug: enabled));
@@ -259,7 +270,7 @@ public sealed class RuntimeService
         {
             _ = Mail.RefreshIfVisibleAsync();
         }
-        if (previous?.DumpCount != fresh.DumpCount)
+        if (previous?.DumpCount != fresh.DumpCount || previous?.EventCount != fresh.EventCount)
         {
             _ = Dumps.RefreshIfVisibleAsync();
         }

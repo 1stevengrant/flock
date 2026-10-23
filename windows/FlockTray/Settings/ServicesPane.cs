@@ -24,6 +24,8 @@ internal sealed partial class ServicesPane(SettingsWindow window, RuntimeService
     private readonly ServicesPaneViewModel rows = new(model.Services, model.Postgres, model.Catalog);
     private readonly ScrollViewer listScroller = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly ScrollViewer detailScroller = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly ContentControl filterHost = new();
+    private Grid? layout;
     private bool installConfirmationQueued;
 
     public override string Title => "Services";
@@ -162,31 +164,39 @@ internal sealed partial class ServicesPane(SettingsWindow window, RuntimeService
         // service is selected.
         var listOffset = listScroller.VerticalOffset;
         var detailOffset = detailScroller.VerticalOffset;
-        var grid = new Grid { ColumnSpacing = 16 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 300 });
         // The filter stays put above the list. Room on the right keeps the scroll bars off the cards.
         list.Margin = new Thickness(0, 0, 14, 8);
-        var left = new Grid();
-        left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        left.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        left.Children.Add(filter);
+        if (layout is null)
+        {
+            layout = new Grid { ColumnSpacing = 16 };
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 300 });
+            var left = new Grid();
+            left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            left.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            left.Children.Add(filterHost);
+            Grid.SetRow(listScroller, 1);
+            left.Children.Add(listScroller);
+            layout.Children.Add(left);
+            Grid.SetColumn(detailScroller, 1);
+            layout.Children.Add(detailScroller);
+        }
+        filterHost.Content = filter;
         listScroller.Content = list;
-        Grid.SetRow(listScroller, 1);
-        left.Children.Add(listScroller);
 
+        if (detailScroller.Content is Border { Child: Panel previousDetail })
+        {
+            previousDetail.Children.Clear();
+        }
         var detail = Detail(selected);
         detail.Margin = new Thickness(0, 0, 14, 8);
-        grid.Children.Add(left);
         detailScroller.Content = detail;
-        Grid.SetColumn(detailScroller, 1);
-        grid.Children.Add(detailScroller);
         Window.DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
         {
             listScroller.ChangeView(null, listOffset, null, disableAnimation: true);
             detailScroller.ChangeView(null, detailOffset, null, disableAnimation: true);
         });
-        return grid;
+        return layout;
     }
 
     private Button Row(Service service, bool isSelected)

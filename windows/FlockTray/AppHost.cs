@@ -121,7 +121,9 @@ public sealed class AppHost : IAsyncDisposable
                 services.GetRequiredService<Flock.Kit.FlockClient>(),
                 _ => services.GetRequiredService<ApplicationRuntime>().RequestQuit(),
                 services.GetService<IUiDispatcher>()));
+#if !SCREENSHOTS
             builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<StatusPollingService>());
+#endif
             builder.Services.AddSingleton<UpdateService>(services =>
             {
                 return new UpdateService(
@@ -137,8 +139,10 @@ public sealed class AppHost : IAsyncDisposable
                     () => services.GetRequiredService<PreferencesService>().Snapshot.Channel,
                     services.GetRequiredService<IUiDispatcher>());
             });
+#if !SCREENSHOTS
             builder.Services.AddSingleton<IHostedService>(services => new UpdateScheduleService(
                 services.GetRequiredService<UpdateService>(), services.GetRequiredService<TimeProvider>()));
+#endif
             builder.Services.AddSingleton<RuntimeService>(services => new RuntimeService(
                 services.GetRequiredService<Flock.Kit.FlockClient>(),
                 services.GetRequiredService<UpdateService>(),

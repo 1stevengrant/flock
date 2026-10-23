@@ -13,6 +13,9 @@ public sealed class DumpsService : IAsyncDisposable
     private readonly FlockClient client;
     private readonly OperationRunner operations;
     private readonly SharedRead<List<Dump>> listRequest;
+    private readonly SharedRead<List<RuntimeEvent>> eventsRequest;
+    private readonly OperationErrors eventsErrors = new();
+    private List<RuntimeEvent> events = [];
     private readonly SharedRead<string> headerRequest;
     private readonly OperationErrors actionErrors = new();
     private readonly OperationErrors listErrors = new();
@@ -30,6 +33,8 @@ public sealed class DumpsService : IAsyncDisposable
         this.client = client;
         this.operations = operations;
         listRequest = new SharedRead<List<Dump>>(dispatcher);
+        eventsRequest = new SharedRead<List<RuntimeEvent>>(dispatcher);
+        eventsErrors.PropertyChanged += ErrorsChanged;
         headerRequest = new SharedRead<string>(dispatcher);
         actionErrors.PropertyChanged += ErrorsChanged;
         listErrors.PropertyChanged += ErrorsChanged;
@@ -38,6 +43,7 @@ public sealed class DumpsService : IAsyncDisposable
     }
 
     public IReadOnlyList<Dump> Dumps => dumps;
+    public IReadOnlyList<RuntimeEvent> Events => events;
 
     /// <summary>The verified shared Symfony header, or null until it is available.</summary>
     public string? Header => header;
@@ -45,7 +51,7 @@ public sealed class DumpsService : IAsyncDisposable
     /// <summary>True when the daemon confirmed that this dump header is not available.</summary>
     public bool HeaderMissing => headerMissing;
 
-    public string? RefreshError => listErrors.Refresh ?? headerErrors.Refresh;
+    public string? RefreshError => listErrors.Refresh ?? eventsErrors.Refresh ?? headerErrors.Refresh;
     public string? ActionError => actionErrors.Action;
     public string? Error => ActionError ?? RefreshError;
     public bool IsClearing => operations.IsRunning(ClearKey);
@@ -109,6 +115,13 @@ public sealed class DumpsService : IAsyncDisposable
             try
             {
                 await client.ClearDumpsAsync(token);
+                try
+                {
+                    await client.ClearEventsAsync(token);
+                }
+                catch (FlockServerException error) when (error.StatusCode == 404)
+                {
+                }
             }
             finally
             {
@@ -135,6 +148,7 @@ public sealed class DumpsService : IAsyncDisposable
         actionErrors.ClearAction();
         listErrors.ClearRefresh();
         headerErrors.ClearRefresh();
+        eventsErrors.ClearRefresh();
     }
 
     public async ValueTask DisposeAsync()
@@ -142,9 +156,11 @@ public sealed class DumpsService : IAsyncDisposable
         operations.RunningChanged -= RunningChanged;
         actionErrors.PropertyChanged -= ErrorsChanged;
         listErrors.PropertyChanged -= ErrorsChanged;
+        eventsErrors.PropertyChanged -= ErrorsChanged;
         headerErrors.PropertyChanged -= ErrorsChanged;
         lifetime.Cancel();
         await listRequest.DisposeAsync();
+        await eventsRequest.DisposeAsync();
         await headerRequest.DisposeAsync();
         lifetime.Dispose();
     }
@@ -152,6 +168,8 @@ public sealed class DumpsService : IAsyncDisposable
     private async Task RefreshCoreAsync(CancellationToken observerToken)
     {
         await listRequest.JoinReadAsync(client.DumpsAsync, ApplyDumps, PublishListFailure, observerToken,
+            lifetimeToken: lifetime.Token);
+        await eventsRequest.JoinReadAsync(ReadEventsAsync, ApplyEvents, error => eventsErrors.SetRefresh(error), observerToken,
             lifetimeToken: lifetime.Token);
 
         if (dumps.Count > 0)
@@ -174,6 +192,37 @@ public sealed class DumpsService : IAsyncDisposable
         dumps = value;
         var hadError = listErrors.Refresh is not null;
         listErrors.ClearRefresh();
+        if (changed || hadError)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    private async Task<List<RuntimeEvent>> ReadEventsAsync(CancellationToken token)
+    {
+        try
+        {
+            return await client.EventsAsync(cancellationToken: token);
+        }
+        catch (FlockServerException error) when (error.StatusCode == 404)
+        {
+            return [];
+        }
+    }
+
+    private void ApplyEvents(List<RuntimeEvent> value)
+    {
+        lock (gate)
+        {
+            if (clearInProgress)
+            {
+                return;
+            }
+        }
+        var changed = FlockJson.Encode(events) != FlockJson.Encode(value);
+        events = value;
+        var hadError = eventsErrors.Refresh is not null;
+        eventsErrors.ClearRefresh();
         if (changed || hadError)
         {
             Changed?.Invoke();
@@ -215,6 +264,7 @@ public sealed class DumpsService : IAsyncDisposable
     private void InvalidateReads()
     {
         listRequest.Invalidate();
+        eventsRequest.Invalidate();
         headerRequest.Invalidate();
     }
 
