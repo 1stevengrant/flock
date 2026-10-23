@@ -5,8 +5,8 @@ using Microsoft.UI.Xaml;
 namespace Flock.Tray;
 
 /// <summary>
-/// Entry point: `FlockTray --selftest` checks every API call against the running daemon and exits
-/// (the output goes to the console it was started from); otherwise the tray app starts, once.
+/// Entry point: `FlockTray --selftest` checks selected daemon endpoints and exits (the output goes
+/// to the console it was started from); otherwise the tray app starts, once.
 /// </summary>
 public static class Program
 {
@@ -16,8 +16,7 @@ public static class Program
         if (args.Contains("--selftest"))
         {
             Native.AttachParentConsole();
-            using var client = new FlockClient();
-            return SelfTest.RunAsync(client, Console.Out).GetAwaiter().GetResult();
+            return RunSelfTestAsync().GetAwaiter().GetResult();
         }
 
         // One tray icon per user session: a second start (e.g. from the Start menu) brings the
@@ -50,5 +49,12 @@ public static class Program
             return 1;
         }
         return 0;
+    }
+
+    private static async Task<int> RunSelfTestAsync()
+    {
+        await using var host = AppHost.Create();
+        await host.StartAsync();
+        return await SelfTest.RunAsync(host.Client, Console.Out);
     }
 }

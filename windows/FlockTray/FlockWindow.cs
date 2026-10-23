@@ -92,6 +92,9 @@ internal abstract class FlockWindow : Window
         Native.SetForegroundWindow(Hwnd);
     }
 
+    /// <summary>Releases window-owned async resources before the native window is destroyed.</summary>
+    public virtual Task ReleaseAsync() => Task.CompletedTask;
+
     private void Center()
     {
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
