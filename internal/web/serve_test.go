@@ -86,6 +86,12 @@ func TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS(t *testing.T) {
 			{Domain: "shop.test", Aliases: []string{"shop-2.test"}, Name: "shop", PHP: "8.4", State: WaitingMissing, File: ".flockrc"},
 			{Domain: "legacy.test", Name: "legacy", PHP: "7.3", State: WaitingUnavailable},
 		},
+		Rootless: []Rootless{
+			{Domain: "zoo.test", Name: "zoo", State: "not_found", Root: ".", Suggestions: []string{"src/www", "admin/www"}},
+			{Domain: "moved.test", Name: "moved", State: "missing", Root: "src/www", Set: true, File: ".flockrc"},
+			{Domain: "cms.test", Name: "cms", State: "empty", Root: "src/www", Set: true},
+			{Domain: "notes.test", Name: "notes", State: "empty", Root: "."},
+		},
 	}
 	if err := Apply(cfg); err != nil {
 		t.Fatalf("%v\n%s", err, Caddyfile(cfg))
@@ -182,6 +188,29 @@ func TestServesEveryDepthAliasAndCatchAllOverTrustedHTTPS(t *testing.T) {
 		for _, w := range want {
 			if resp.StatusCode != http.StatusNotFound || !strings.Contains(body, w) || strings.Contains(body, "Not linked") {
 				t.Errorf("%s: want the PHP page with %q, got %d %q", url, w, resp.StatusCode, body)
+			}
+		}
+	}
+
+	// A site without a document root says so on every name and scheme, with the folders that could be it.
+	for url, want := range map[string][]string{
+		fmt.Sprintf("http://x.zoo.test:%d/", cfg.HTTPPort): {"No document root", "<strong>zoo</strong>", "none of the usual document roots", "<code>src/www</code>, <code>admin/www</code>",
+			"flock root src/www --site zoo<", "flock pin root src/www --site zoo<", `class="or"`, "Prefer the app?", "data-wait"},
+		https("moved.test"): {"src/www isn&rsquo;t there", "set in <code>.flockrc</code>", "but that folder doesn&rsquo;t exist",
+			"flock root &lt;folder&gt; --site moved<"},
+		fmt.Sprintf("http://cms.test:%d/", cfg.HTTPPort): {"src/www has nothing to serve yet", "set on this machine",
+			"but it has no <code>index.php</code> yet"},
+		fmt.Sprintf("http://notes.test:%d/", cfg.HTTPPort): {"Which folder should Flock serve?",
+			"There&rsquo;s no <code>index.php</code> in the project yet"},
+	} {
+		resp, body, err := get(url)
+		if err != nil {
+			t.Errorf("%s: %v", url, err)
+			continue
+		}
+		for _, w := range want {
+			if resp.StatusCode != http.StatusNotFound || !strings.Contains(body, w) || strings.Contains(body, "Not linked") || strings.Contains(body, "Not secured") {
+				t.Errorf("%s: want the document root page with %q, got %d %q", url, w, resp.StatusCode, body)
 			}
 		}
 	}

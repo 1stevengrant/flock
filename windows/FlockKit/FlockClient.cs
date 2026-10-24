@@ -107,6 +107,20 @@ public sealed class FlockClient : IDisposable
     /// </summary>
     public Task<Status> AddBoostGuidelineAsync(string site, CancellationToken cancellationToken = default) => Send<Status>(HttpMethod.Post, $"/v1/sites/{Escape(site)}/boost", timeout: BoostTimeout, cancellationToken: cancellationToken);
 
+    /// <summary>
+    /// Shares a site at a temporary public URL; allow lists the emails (or *@domain) let in, none for
+    /// anyone with the URL, and debug turns the app's debug mode on for visitors. It returns at once:
+    /// the status follows the share until it runs.
+    /// </summary>
+    public Task<Status.SiteShare> StartShareAsync(string site, IReadOnlyList<string> allow, bool debug = false) =>
+        Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}", new { allow, debug });
+
+    /// <summary>Builds a running share's assets again, so visitors see the latest changes when they reload.</summary>
+    public Task<Status.SiteShare> RebuildShareAsync(string site) => Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}/rebuild");
+
+    /// <summary>Ends a site's share (and forgets a failed one).</summary>
+    public Task<List<Status.SiteShare>> StopShareAsync(string site) => Send<List<Status.SiteShare>>(HttpMethod.Delete, $"/v1/shares/{Escape(site)}");
+
     public Task<ExtensionReport> SiteExtensionsAsync(string site, CancellationToken cancellationToken = default) => Get<ExtensionReport>($"/v1/sites/{Escape(site)}/extensions", cancellationToken: cancellationToken);
 
     /// <summary>Adds the extension to the site's composer.json (ext-NAME) with Composer (up to 5 minutes).</summary>
