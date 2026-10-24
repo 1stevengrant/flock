@@ -85,6 +85,19 @@ fails, or a service hasn't exited after 10 seconds, it is killed. php-cgi worker
    `.\windows\build.ps1` and start `windows\dist\FlockTray-x64\FlockTray.exe`.
    `FlockTray.exe --selftest` checks every API call against the running daemon.
 
+### Running the development tray alongside an installed copy
+
+Run `dotnet run --project windows/FlockTray -p:Platform=x64` from the repository root, or launch the executable produced by `windows/build.ps1`.
+An executable without the installer's adjacent `unins000.exe` runs as **Flock Dev**, in Debug or Release. Use `--dev` to force this mode when testing
+from an installed directory.
+
+Each local executable path has its own single-instance mutex and activation window. Starting that executable again opens its existing dev window;
+it never hands the launch to the installed production tray. Windows show `[Dev]`, and the tray tooltip and panel header show **Flock Dev**.
+
+Dev builds use separate tray preferences and WebView2 data under `%LocalAppData%\Flock\Flock.Tray.Dev.<path-hash>`. App updates and automatic bundled
+CLI replacement are disabled. The dev tray still connects to the installed daemon by default: its sites, services, and daemon version are real,
+and actions in the dev UI affect that daemon. `FLOCK_HOME` still selects a different daemon data folder when needed.
+
 ### First-run checklist
 
 - [ ] `flock install` finishes; Task Scheduler shows "Flock Daemon"; `flock status` answers

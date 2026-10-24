@@ -56,9 +56,9 @@ internal static partial class Native
     /// Asks the running instance to bring its main window to the front, or, for a flock:// link
     /// this process was started with, to open the link.
     /// </summary>
-    public static void SignalRunningInstance(string? link = null)
+    public static void SignalRunningInstance(string? link = null, string windowClass = TrayWindowClass)
     {
-        var hwnd = FindWindow(TrayWindowClass, null);
+        var hwnd = FindWindow(windowClass, null);
         if (hwnd != IntPtr.Zero)
         {
             // This process was just started by the user, so it may take the foreground; pass that

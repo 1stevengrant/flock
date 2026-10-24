@@ -23,7 +23,7 @@ internal abstract class FlockWindow : Window
 
     protected FlockWindow(string title, int width, int height, int minWidth = 640, int minHeight = 420)
     {
-        Title = title;
+        Title = DisplayTitle(title);
         Hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         SystemBackdrop = new MicaBackdrop();
@@ -35,7 +35,7 @@ internal abstract class FlockWindow : Window
         ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         var titleBar = new Grid { Height = 48, Padding = new Thickness(16, 0, 0, 0) };
-        caption = Ui.Text(title, "CaptionTextBlockStyle", wrap: false);
+        caption = Ui.Text(Title, "CaptionTextBlockStyle", wrap: false);
         titleBar.Children.Add(Ui.Row(12,
             new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.png"))), Width = 16, Height = 16 },
             caption));
@@ -68,10 +68,12 @@ internal abstract class FlockWindow : Window
         get => caption.Text;
         set
         {
-            Title = value;
-            caption.Text = value;
+            Title = DisplayTitle(value);
+            caption.Text = Title;
         }
     }
+
+    private static string DisplayTitle(string title) => App.Current.Options.Identity.IsDevelopment ? title + " [Dev]" : title;
 
     /// <summary>Asks before a change; see Ui.Confirm.</summary>
     public Task<bool> Confirm(string question, string details, string action, bool destructive = false, UIElement? extra = null) =>

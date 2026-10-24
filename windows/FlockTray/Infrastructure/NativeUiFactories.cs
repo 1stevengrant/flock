@@ -25,11 +25,12 @@ public interface ITrayIcon : IDisposable
     event Action<string>? Failure;
 }
 
-public sealed class TrayIconFactory(ITrayNativeApi native, IUiDispatcher dispatcher, ILogger<TrayService> logger) : ITrayIconFactory
+public sealed class TrayIconFactory(ITrayNativeApi native, IUiDispatcher dispatcher, ILogger<TrayService> logger,
+    string windowClass = Native.TrayWindowClass) : ITrayIconFactory
 {
     public async Task<ITrayIcon> CreateAsync(string iconPath, string tooltip)
     {
-        var tray = new TrayService(native, dispatcher, logger);
+        var tray = new TrayService(native, dispatcher, logger, windowClass);
         try
         {
             await tray.StartAsync(iconPath, tooltip);

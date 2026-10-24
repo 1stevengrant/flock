@@ -57,6 +57,7 @@ public sealed class TrayService : ITrayIcon, IDisposable
     private const int ERROR_CLASS_ALREADY_EXISTS = 1410;
 
     private readonly ITrayNativeApi native;
+    private readonly string windowClass;
     private readonly IUiDispatcher? dispatcher;
     private readonly ILogger<TrayService>? logger;
     private readonly object gate = new();
@@ -73,9 +74,11 @@ public sealed class TrayService : ITrayIcon, IDisposable
     private bool disposed;
     private bool disposing;
 
-    public TrayService(ITrayNativeApi native, IUiDispatcher? dispatcher = null, ILogger<TrayService>? logger = null)
+    public TrayService(ITrayNativeApi native, IUiDispatcher? dispatcher = null, ILogger<TrayService>? logger = null,
+        string windowClass = Native.TrayWindowClass)
     {
         this.native = native;
+        this.windowClass = windowClass;
         this.dispatcher = dispatcher;
         this.logger = logger;
     }
@@ -104,7 +107,7 @@ public sealed class TrayService : ITrayIcon, IDisposable
             }
             try
             {
-                className = Native.TrayWindowClass;
+                className = windowClass;
                 instance = native.ModuleHandle();
                 taskbarCreated = native.RegisterWindowMessage("TaskbarCreated");
                 if (taskbarCreated == 0)

@@ -92,7 +92,7 @@ public sealed class AppHost : IAsyncDisposable
                 path: options.PreferencesPath, dispatcher: services.GetService<IUiDispatcher>(), log: error => logSink.TryWrite($"{DateTimeOffset.Now:O} preferences: {error}")));
             builder.Services.AddSingleton<InstallationService>();
             builder.Services.AddSingleton<OperationRunner>();
-            builder.Services.AddSingleton<IUpdateInstallationMetadata, UpdateInstallationMetadata>();
+            builder.Services.AddSingleton<IUpdateInstallationMetadata>(new UpdateInstallationMetadata(options.Identity.IsDevelopment));
             builder.Services.AddSingleton<IUpdateFileCleanup, UpdateFileCleanup>();
             builder.Services.AddSingleton<IAuthenticodeVerifier, WindowsAuthenticodeVerifier>();
             builder.Services.AddSingleton<IUpdateFileVerifier, UpdateFileVerifier>();
@@ -118,7 +118,9 @@ public sealed class AppHost : IAsyncDisposable
             builder.Services.AddSingleton<IWindowFactory, WindowFactory>();
             builder.Services.AddScoped<LogsViewModel>();
             builder.Services.AddSingleton<WindowManager>();
-            builder.Services.AddSingleton<ITrayIconFactory, TrayIconFactory>();
+            builder.Services.AddSingleton<ITrayIconFactory>(services => new TrayIconFactory(
+                services.GetRequiredService<ITrayNativeApi>(), services.GetRequiredService<IUiDispatcher>(),
+                services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TrayService>>(), options.Identity.WindowClass));
             builder.Services.AddSingleton<IPanelWindowFactory, PanelWindowFactory>();
             builder.Services.AddSingleton<StatusPollingService>(services => new StatusPollingService(
                 services.GetRequiredService<Flock.Kit.FlockClient>(),

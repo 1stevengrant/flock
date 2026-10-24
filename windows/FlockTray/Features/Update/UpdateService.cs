@@ -16,9 +16,9 @@ public interface IUpdateInstallationMetadata
     string DownloadDirectory { get; }
 }
 
-public sealed class UpdateInstallationMetadata : IUpdateInstallationMetadata
+public sealed class UpdateInstallationMetadata(bool development = false) : IUpdateInstallationMetadata
 {
-    public AppVersion? CurrentVersion => UpdateService.Current;
+    public AppVersion? CurrentVersion => development ? null : UpdateService.Current;
     public Version OperatingSystemVersion => Environment.OSVersion.Version;
     public string DownloadDirectory => Path.Combine(Path.GetTempPath(), "Flock");
 }
@@ -308,7 +308,8 @@ public sealed class UpdateService
     }
 
     public Task<OperationOutcome> CheckAndInstallAsync(CancellationToken cancellationToken = default) =>
-        RunOperationAsync(CheckAndInstallCoreAsync, cancellationToken, action: true);
+        IsEnabled ? RunOperationAsync(CheckAndInstallCoreAsync, cancellationToken, action: true)
+            : Task.FromResult(OperationOutcome.Rejected);
 
     public Task<OperationOutcome> InstallAsync(CancellationToken cancellationToken = default)
     {

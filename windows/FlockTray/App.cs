@@ -115,7 +115,7 @@ public sealed class App : Application, IXamlMetadataProvider
 
             tray = trayFactory is null
                 ? throw new InvalidOperationException("The tray icon factory is unavailable.")
-                : await trayFactory.CreateAsync(IconPath(), "Flock");
+                : await trayFactory.CreateAsync(IconPath(), Options.Identity.DisplayName);
             tray.Clicked += TogglePanel;
             tray.ShowRequested += ShowMain;
             tray.LinkReceived += OpenLink;
@@ -125,7 +125,7 @@ public sealed class App : Application, IXamlMetadataProvider
             State.Changed += UpdateTray;
             State.NeedsSetup = State.Installation.BundledFlock is not null && !await State.Installation.IsSetUpAsync();
 
-            if (!State.NeedsSetup && await State.Installation.NeedsUpdateAsync())
+            if (!Options.Identity.IsDevelopment && !State.NeedsSetup && await State.Installation.NeedsUpdateAsync())
             {
                 host.StartUpdateInstallation();
             }
@@ -179,7 +179,7 @@ public sealed class App : Application, IXamlMetadataProvider
 
     private void UpdateTrayCore()
     {
-        var tooltip = "Flock — " + State.Headline;
+        var tooltip = Options.Identity.DisplayName + " — " + State.Headline;
         if (State.Status is { Warnings.Count: > 0 } status && !State.NeedsSetup)
         {
             tooltip += "\n" + status.Warnings[0];

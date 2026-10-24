@@ -104,7 +104,7 @@ internal sealed class GeneralPane(SettingsWindow window, RuntimeService model) :
     private Border AppUpdate()
     {
         var updater = Model.UpdateService;
-        if (Features.Update.UpdateService.Current is not { } current)
+        if (!updater.IsEnabled || Features.Update.UpdateService.Current is not { } current)
         {
             return Ui.Setting("Flock", "Updates are off in development builds.", null);
         }

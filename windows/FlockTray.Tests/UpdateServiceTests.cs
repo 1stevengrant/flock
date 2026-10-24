@@ -35,6 +35,19 @@ public sealed class UpdateServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DevelopmentBuildRejectsAllUpdateEntryPoints()
+    {
+        metadata.Current = new UpdateInstallationMetadata(development: true).CurrentVersion;
+
+        Assert.False(service.IsEnabled);
+        Assert.Equal(OperationOutcome.Rejected, await service.CheckAsync(userInitiated: true));
+        Assert.Equal(OperationOutcome.Rejected, await service.InstallAsync());
+        Assert.Equal(OperationOutcome.Rejected, await service.CheckAndInstallAsync());
+        Assert.Equal(0, handler.FeedRequests);
+        Assert.False(launcher.Called);
+    }
+
+    [Fact]
     public async Task ConcurrentChecksJoinOneReadAndKeepTheLatestOwner()
     {
         handler.Feed = Feed("1.1.0", "stable", 1);

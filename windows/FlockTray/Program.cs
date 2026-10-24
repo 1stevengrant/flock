@@ -17,22 +17,27 @@ public static class Program
             return RunSelfTestAsync().GetAwaiter().GetResult();
         }
 
-        // One tray icon per user session: a second start (e.g. from the Start menu) brings the
-        // running app's main window to the front, and one for a flock:// link hands it over.
-        using var single = new Mutex(initiallyOwned: true, @"Local\Flock.Tray", out var first);
+        var identity = LaunchIdentity.ForExecutable(Environment.ProcessPath!, Installation.Uninstaller is not null,
+            args.Contains("--dev"));
+        // Installed launches share one instance; local builds only activate their own executable.
+        using var single = new Mutex(initiallyOwned: true, identity.MutexName, out var first);
         if (!first)
         {
-            Native.SignalRunningInstance(args.FirstOrDefault(SecureLink.IsFlockLink));
+            Native.SignalRunningInstance(args.FirstOrDefault(SecureLink.IsFlockLink), identity.WindowClass);
             return 0;
         }
 
         // Unpackaged apps would put WebView2's profile next to the exe, which may not be writable.
         Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flock", "WebView2"));
+            Path.Combine(identity.DataDirectory, "WebView2"));
 
         try
         {
-            App.Run(new AppOptions());
+            App.Run(new AppOptions
+            {
+                Identity = identity,
+                PreferencesPath = Path.Combine(identity.DataDirectory, "tray.json"),
+            });
         }
         catch (Exception e)
         {

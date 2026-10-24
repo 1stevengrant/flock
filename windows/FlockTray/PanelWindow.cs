@@ -73,7 +73,7 @@ internal sealed partial class PanelWindow : Window
         statusContent.Children.Add(Divider());
         statusContent.Children.Add(shortcutsSlot);
         hwnd = Microsoft.UI.Win32Interop.GetWindowFromWindowId(AppWindow.Id);
-        Title = "Flock";
+        Title = App.Current.Options.Identity.DisplayName;
         SystemBackdrop = new DesktopAcrylicBackdrop();
         if (App.Current.Options.UseSolidBackground)
         {
@@ -264,7 +264,7 @@ internal sealed partial class PanelWindow : Window
             Width = 26,
             Height = 26,
         };
-        var title = Ui.Column(0, Ui.Text("Flock", "BodyStrongTextBlockStyle"), Ui.Caption(model.Headline));
+        var title = Ui.Column(0, Ui.Text(App.Current.Options.Identity.DisplayName, "BodyStrongTextBlockStyle"), Ui.Caption(model.Headline));
         var leading = Ui.Row(10, icon, title);
         return model.IsRestarting ? Ui.Spread(leading, new ProgressRing { Width = 16, Height = 16 }) : Ui.Spread(leading);
     }
