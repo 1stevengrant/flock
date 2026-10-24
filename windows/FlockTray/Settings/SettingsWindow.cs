@@ -79,6 +79,7 @@ internal sealed partial class SettingsWindow : FlockWindow
     private readonly ScrollViewer scroller = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly InfoBar error;
     private readonly Dictionary<SettingsPane, Pane> panes = [];
+    internal SitesPane Sites => (SitesPane)panes[SettingsPane.Sites];
     private SettingsPane current = SettingsPane.General;
     private readonly SettingsWindowViewModel viewModel;
     private readonly Action<Features.Preferences.PreferenceData> preferencesChanged;

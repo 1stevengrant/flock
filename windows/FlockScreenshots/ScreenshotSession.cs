@@ -5,12 +5,12 @@ using Flock.Tray.ViewModels;
 
 namespace Flock.Tray;
 
-/// <summary>Opens the app's windows for Screenshots, the way the tray menu and links do.</summary>
-public sealed partial class App
+/// <summary>Opens the referenced app's windows through its window manager.</summary>
+internal sealed class ScreenshotSession(App app)
 {
     internal async Task<Window> ShowWindow(WindowKind kind, SettingsPane? pane = null)
     {
-        var window = await windowManager!.OpenAsync(kind);
+        var window = await app.Windows.OpenAsync(kind);
         if (window is SettingsWindow settings && pane is { } selected)
         {
             settings.Select(selected);
@@ -39,7 +39,7 @@ public sealed partial class App
     {
         var window = (SettingsWindow)await ShowSettings(SettingsPane.Sites);
         await Settled();
-        window.Sites.SelectForScreenshot(name);
+        window.Sites.Select(name);
         await Settled();
         return window;
     }
@@ -48,7 +48,7 @@ public sealed partial class App
     internal async Task<Window> ShowAddDomain(string site, string domain)
     {
         var window = (SettingsWindow)await ShowSite(site);
-        _ = window.Sites.AddDomainForScreenshot(site);
+        _ = window.Sites.AddDomain(app.State.Status!.Sites.First(s => s.Name == site));
         // The dialog's popup opens, then its content loads.
         for (var attempt = 0; attempt < 20; attempt++)
         {
@@ -101,7 +101,7 @@ public sealed partial class App
 
     internal Task<Window> ShowPanelForScreenshot()
     {
-        screenshotPanel = new PanelWindow(new PanelViewModel(State));
+        screenshotPanel = new PanelWindow(new PanelViewModel(app.State));
         screenshotPanel.ShowNearTray();
         return Task.FromResult<Window>(screenshotPanel);
     }
@@ -110,7 +110,7 @@ public sealed partial class App
 
     internal async Task CloseScreenshotWindowsAsync()
     {
-        await windowManager!.CloseAllAsync();
+        await app.Windows.CloseAllAsync();
         if (screenshotPanel is not null)
         {
             screenshotPanel.Release();
@@ -138,21 +138,4 @@ public sealed partial class App
         }
         return null;
     }
-}
-
-internal sealed partial class MailWindow
-{
-    internal void SelectFirst() => list.SelectedIndex = 0;
-}
-
-internal sealed partial class SettingsWindow
-{
-    internal SitesPane Sites => (SitesPane)panes[SettingsPane.Sites];
-}
-
-internal sealed partial class SitesPane
-{
-    internal void SelectForScreenshot(string name) => Select(name);
-
-    internal Task AddDomainForScreenshot(string name) => AddDomain(Model.Status!.Sites.First(s => s.Name == name));
 }

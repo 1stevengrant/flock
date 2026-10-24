@@ -24,6 +24,8 @@ internal sealed partial class MailWindow : FlockWindow
 
     private readonly Task initialRefresh;
 
+    internal void SelectFirst() => list.SelectedIndex = 0;
+
     public MailWindow(MailViewModel viewModel) : base("Mail", 1000, 660)
     {
         this.viewModel = viewModel;

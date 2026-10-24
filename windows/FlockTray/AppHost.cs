@@ -56,6 +56,9 @@ public sealed class AppHost : IAsyncDisposable
     public T? GetService<T>() where T : class => host.Services.GetService<T>();
 
     public static AppHost Create(DispatcherQueue? dispatcher = null, Func<Task>? releaseUi = null)
+        => Create(dispatcher, releaseUi, new AppOptions());
+
+    internal static AppHost Create(DispatcherQueue? dispatcher, Func<Task>? releaseUi, AppOptions options)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
@@ -86,7 +89,7 @@ public sealed class AppHost : IAsyncDisposable
         {
             builder.Services.AddSingleton<CliProcessRunner>();
             builder.Services.AddSingleton<PreferencesService>(services => new PreferencesService(
-                dispatcher: services.GetService<IUiDispatcher>(), log: error => logSink.TryWrite($"{DateTimeOffset.Now:O} preferences: {error}")));
+                path: options.PreferencesPath, dispatcher: services.GetService<IUiDispatcher>(), log: error => logSink.TryWrite($"{DateTimeOffset.Now:O} preferences: {error}")));
             builder.Services.AddSingleton<InstallationService>();
             builder.Services.AddSingleton<OperationRunner>();
             builder.Services.AddSingleton<IUpdateInstallationMetadata, UpdateInstallationMetadata>();
@@ -121,9 +124,10 @@ public sealed class AppHost : IAsyncDisposable
                 services.GetRequiredService<Flock.Kit.FlockClient>(),
                 _ => services.GetRequiredService<ApplicationRuntime>().RequestQuit(),
                 services.GetService<IUiDispatcher>()));
-#if !SCREENSHOTS
-            builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<StatusPollingService>());
-#endif
+            if (options.EnableBackgroundServices)
+            {
+                builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<StatusPollingService>());
+            }
             builder.Services.AddSingleton<UpdateService>(services =>
             {
                 return new UpdateService(
@@ -139,10 +143,11 @@ public sealed class AppHost : IAsyncDisposable
                     () => services.GetRequiredService<PreferencesService>().Snapshot.Channel,
                     services.GetRequiredService<IUiDispatcher>());
             });
-#if !SCREENSHOTS
-            builder.Services.AddSingleton<IHostedService>(services => new UpdateScheduleService(
-                services.GetRequiredService<UpdateService>(), services.GetRequiredService<TimeProvider>()));
-#endif
+            if (options.EnableBackgroundServices)
+            {
+                builder.Services.AddSingleton<IHostedService>(services => new UpdateScheduleService(
+                    services.GetRequiredService<UpdateService>(), services.GetRequiredService<TimeProvider>()));
+            }
             builder.Services.AddSingleton<RuntimeService>(services => new RuntimeService(
                 services.GetRequiredService<Flock.Kit.FlockClient>(),
                 services.GetRequiredService<UpdateService>(),

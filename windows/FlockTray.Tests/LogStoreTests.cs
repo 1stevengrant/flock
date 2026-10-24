@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Extensions.Time.Testing;
 using Flock.Kit;
 using Flock.Tray;
 using Flock.Tray.Infrastructure;
@@ -8,10 +9,11 @@ using Flock.Tray.ViewModels;
 
 namespace Flock.Tray.Tests;
 
-public sealed class LogsViewModelTests : IDisposable
+public sealed class LogsViewModelTests : IAsyncLifetime
 {
     private readonly string dir = Directory.CreateTempSubdirectory("flock-logs-").FullName;
     private readonly Handler handler = new();
+    private readonly FakeTimeProvider requestClock = new();
     private readonly HttpClient http;
     private readonly FlockClient client;
     private readonly LogsViewModel viewModel;
@@ -21,13 +23,15 @@ public sealed class LogsViewModelTests : IDisposable
         var path = Path.Combine(dir, "api.json");
         File.WriteAllText(path, """{"url":"http://127.0.0.1:1","token":"test"}""");
         http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        client = new FlockClient(http, path);
+        client = new FlockClient(http, path, requestClock);
         viewModel = new LogsViewModel(client, new OperationRunner());
     }
 
-    public void Dispose()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
-        viewModel.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await viewModel.DisposeAsync();
         client.Dispose();
         http.Dispose();
         Directory.Delete(dir, recursive: true);
@@ -54,7 +58,12 @@ public sealed class LogsViewModelTests : IDisposable
     {
         private readonly Channel<Pending> requests = Channel.CreateUnbounded<Pending>();
 
-        public async Task<Pending> NextAsync() => await requests.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        public async Task<Pending> NextAsync()
+        {
+            // This is a deadlock watchdog, not the endpoint deadline or a timing assertion.
+            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            return await requests.Reader.ReadAsync(watchdog.Token);
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -144,6 +153,23 @@ public sealed class LogsViewModelTests : IDisposable
         oldResponse.Log(a, "A contents");
         await older;
         Assert.Equal("B failed", viewModel.Error);
+    }
+
+    [Fact]
+    public async Task RequestDeadlineFiresOnlyWhenTheRequestClockTicks()
+    {
+        var load = LoadAsync(new LogsViewModel.SiteSource("a"));
+        await handler.NextAsync();
+
+        requestClock.Advance(TimeSpan.FromSeconds(4));
+        Assert.False(load.IsCompleted);
+
+        requestClock.Advance(TimeSpan.FromSeconds(1));
+        await load.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal("Flock did not answer GET /v1/logs/sites/a?limit=200 in time", viewModel.LoadError);
+        Assert.Null(viewModel.Current);
+        Assert.False(viewModel.IsLoading);
     }
 
     [Fact]
@@ -324,7 +350,7 @@ public sealed class LogsViewModelTests : IDisposable
         polled.AutoRefreshEnabled = true;
         clock.Tick();
         (await handler.NextAsync()).Log(source, "after refresh");
-        await changed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await changed.Task.WaitAsync(TimeSpan.FromSeconds(60));
         await polled.DisposeAsync();
 
         Assert.Equal("after refresh", Assert.IsType<LogsViewModel.ServiceContent>(polled.Current).Text);

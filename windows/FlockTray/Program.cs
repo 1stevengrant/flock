@@ -1,6 +1,4 @@
 using Flock.Kit;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
 
 namespace Flock.Tray;
 
@@ -28,18 +26,13 @@ public static class Program
             return 0;
         }
 
-        WinRT.ComWrappersSupport.InitializeComWrappers();
         // Unpackaged apps would put WebView2's profile next to the exe, which may not be writable.
         Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flock", "WebView2"));
 
         try
         {
-            Application.Start(callback =>
-            {
-                SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-                _ = new App();
-            });
+            App.Run(new AppOptions());
         }
         catch (Exception e)
         {

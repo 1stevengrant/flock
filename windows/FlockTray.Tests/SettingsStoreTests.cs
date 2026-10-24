@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Time.Testing;
 using Flock.Kit;
 using Flock.Tray.Features.Configuration;
 using Flock.Tray.Features.FrankenPhp;
@@ -13,7 +14,7 @@ using CatalogFeatureService = Flock.Tray.Features.Services.CatalogService;
 
 namespace Flock.Tray.Tests;
 
-public sealed class FeatureServiceErrorTests : IDisposable
+public sealed class FeatureServiceErrorTests : IAsyncLifetime
 {
     private readonly string dir = Directory.CreateTempSubdirectory("flock-feature-errors-").FullName;
     private readonly Handler handler = new();
@@ -35,7 +36,7 @@ public sealed class FeatureServiceErrorTests : IDisposable
         var path = Path.Combine(dir, "api.json");
         File.WriteAllText(path, "{\"url\":\"http://127.0.0.1:1\",\"token\":\"test\"}");
         http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        client = new FlockClient(http, path);
+        client = new FlockClient(http, path, new FakeTimeProvider());
         var runner = new OperationRunner();
         configuration = new ConfigurationService(client, runner);
         services = new ServicesService(client, runner);
@@ -49,11 +50,13 @@ public sealed class FeatureServiceErrorTests : IDisposable
         owners = [configuration, services, sites, php, frankenPhp, node, catalog, postgres, mcp];
     }
 
-    public void Dispose()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         foreach (var owner in owners)
         {
-            owner.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await owner.DisposeAsync();
         }
         client.Dispose();
         http.Dispose();

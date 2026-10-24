@@ -15,7 +15,7 @@ public enum WindowKind { Mail, Dumps, Logs, Settings, Setup }
 /// The tray app: a notification area icon with a panel (the macOS menu bar extra), plus the
 /// Mail, Dumps, Logs and Settings windows. It keeps running with no window open.
 /// </summary>
-public sealed partial class App : Application, IXamlMetadataProvider
+public sealed class App : Application, IXamlMetadataProvider
 {
     // Without XAML markup there is no generated type info; WinUI's own provider covers its controls.
     private readonly XamlControlsXamlMetaDataProvider metadata = new();
@@ -39,11 +39,31 @@ public sealed partial class App : Application, IXamlMetadataProvider
 
     public ApplicationRuntime Runtime => host?.Runtime ?? throw new InvalidOperationException("The application has not launched.");
 
-    public App()
+    internal static void Run(AppOptions options)
     {
-#if SCREENSHOTS
-        RequestedTheme = Screenshots.Current.Theme;
-#endif
+        WinRT.ComWrappersSupport.InitializeComWrappers();
+        Application.Start(callback =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
+            _ = new App(options);
+        });
+    }
+
+    internal AppOptions Options { get; }
+
+    internal WindowManager Windows => windowManager ?? throw new InvalidOperationException("The application has not launched.");
+
+    public App() : this(new AppOptions())
+    {
+    }
+
+    internal App(AppOptions options)
+    {
+        Options = options;
+        if (options.Theme is { } theme)
+        {
+            RequestedTheme = theme;
+        }
         UnhandledException += (_, args) =>
         {
             Log(args.Exception);
@@ -81,16 +101,17 @@ public sealed partial class App : Application, IXamlMetadataProvider
             this.dispatcher = dispatcher;
             Resources.MergedDictionaries.Add(new XamlControlsResources());
             DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
-            host = AppHost.Create(dispatcher, ReleaseUiAsync);
+            host = AppHost.Create(dispatcher, ReleaseUiAsync, Options);
             await host.StartAsync();
             windowManager = host.GetService<WindowManager>();
             uiDispatcher = host.GetService<IUiDispatcher>();
             trayFactory = host.GetService<ITrayIconFactory>();
             panelFactory = host.GetService<IPanelWindowFactory>();
-#if SCREENSHOTS
-            Screenshots.Current.Start(this);
-            return;
-#else
+            if (Options.OnStarted is { } onStarted)
+            {
+                await onStarted(this);
+                return;
+            }
 
             tray = trayFactory is null
                 ? throw new InvalidOperationException("The tray icon factory is unavailable.")
@@ -117,7 +138,6 @@ public sealed partial class App : Application, IXamlMetadataProvider
             {
                 ShowMain();
             }
-#endif
         }
         catch (Exception error)
         {

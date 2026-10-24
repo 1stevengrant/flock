@@ -37,15 +37,17 @@ public sealed class FlockClient : IDisposable
     private static readonly TimeSpan BoostTimeout = TimeSpan.FromMinutes(2);
 
     private readonly HttpClient http;
+    private readonly TimeProvider timeProvider;
     private readonly SemaphoreSlim configLock = new(1, 1);
     private ApiConfig? config;
 
     /// <summary>Creates a client over an application-owned transport. The transport is not disposed by this client.</summary>
-    public FlockClient(HttpClient http, string? configPath = null)
+    public FlockClient(HttpClient http, string? configPath = null, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         this.configPath = configPath ?? FlockPaths.ApiJson;
         this.http = http;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>Releases client-local configuration locking. The application-owned transport remains live.</summary>
@@ -112,14 +114,16 @@ public sealed class FlockClient : IDisposable
     /// anyone with the URL, and debug turns the app's debug mode on for visitors. It returns at once:
     /// the status follows the share until it runs.
     /// </summary>
-    public Task<Status.SiteShare> StartShareAsync(string site, IReadOnlyList<string> allow, bool debug = false) =>
-        Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}", new { allow, debug });
+    public Task<Status.SiteShare> StartShareAsync(string site, IReadOnlyList<string> allow, bool debug = false, CancellationToken cancellationToken = default) =>
+        Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}", new { allow, debug }, cancellationToken: cancellationToken);
 
     /// <summary>Builds a running share's assets again, so visitors see the latest changes when they reload.</summary>
-    public Task<Status.SiteShare> RebuildShareAsync(string site) => Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}/rebuild");
+    public Task<Status.SiteShare> RebuildShareAsync(string site, CancellationToken cancellationToken = default) =>
+        Send<Status.SiteShare>(HttpMethod.Post, $"/v1/shares/{Escape(site)}/rebuild", cancellationToken: cancellationToken);
 
     /// <summary>Ends a site's share (and forgets a failed one).</summary>
-    public Task<List<Status.SiteShare>> StopShareAsync(string site) => Send<List<Status.SiteShare>>(HttpMethod.Delete, $"/v1/shares/{Escape(site)}");
+    public Task<List<Status.SiteShare>> StopShareAsync(string site, CancellationToken cancellationToken = default) =>
+        Send<List<Status.SiteShare>>(HttpMethod.Delete, $"/v1/shares/{Escape(site)}", cancellationToken: cancellationToken);
 
     public Task<ExtensionReport> SiteExtensionsAsync(string site, CancellationToken cancellationToken = default) => Get<ExtensionReport>($"/v1/sites/{Escape(site)}/extensions", cancellationToken: cancellationToken);
 
@@ -395,7 +399,7 @@ public sealed class FlockClient : IDisposable
     private async Task<byte[]> ExecuteAttempt(HttpMethod method, string path, object? body, TimeSpan? timeout, bool force, CancellationToken cancellationToken)
     {
         var limit = timeout ?? DefaultTimeout;
-        using var timeoutCts = new CancellationTokenSource(limit);
+        using var timeoutCts = new CancellationTokenSource(limit, timeProvider);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
         try
         {

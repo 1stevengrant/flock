@@ -88,10 +88,12 @@ internal sealed class HtmlView : Grid
         {
             await web.EnsureCoreWebView2Async();
             var core = web.CoreWebView2;
-#if SCREENSHOTS
-            // WebView2 follows Windows' theme, the screenshots' app doesn't.
-            core.Profile.PreferredColorScheme = Screenshots.Current.WebViewColorScheme;
-#endif
+            if (App.Current.Options.Theme is { } theme)
+            {
+                core.Profile.PreferredColorScheme = theme == ApplicationTheme.Dark
+                    ? CoreWebView2PreferredColorScheme.Dark
+                    : CoreWebView2PreferredColorScheme.Light;
+            }
             core.Settings.IsScriptEnabled = allowScripts;
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;

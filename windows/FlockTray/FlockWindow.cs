@@ -27,9 +27,10 @@ internal abstract class FlockWindow : Window
         Hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         SystemBackdrop = new MicaBackdrop();
-#if SCREENSHOTS
-        root.Background = Screenshots.WindowBackground;
-#endif
+        if (App.Current.Options.UseSolidBackground)
+        {
+            root.Background = Ui.Brush("SolidBackgroundFillColorBaseBrush");
+        }
 
         ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;

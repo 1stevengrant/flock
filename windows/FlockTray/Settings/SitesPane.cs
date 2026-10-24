@@ -180,7 +180,7 @@ internal sealed partial class SitesPane : Pane
         }
     }
 
-    private void Select(string name)
+    internal void Select(string name)
     {
         if (name != selection)
         {
@@ -699,11 +699,11 @@ internal sealed partial class SitesPane : Pane
             if (picker.SelectedIndex == picker.Items.Count - 1)
             {
                 picker.SelectedIndex = selected;
-                _ = ChooseRoot(site);
+                Start(site.Name, () => ChooseRoot(site));
                 return;
             }
             var root = picker.SelectedIndex == 0 ? "" : folders[picker.SelectedIndex - 1];
-            _ = Perform(c => c.UpdateSiteAsync(site.Name, new SiteChange(Root: root)));
+            Start(site.Name, () => Model.Sites.UpdateAsync(site.Name, new SiteChange(Root: root)));
         };
         Ui.AutomationName(picker, "Document root");
         ToolTipService.SetToolTip(picker, site.RootSource switch
@@ -724,11 +724,11 @@ internal sealed partial class SitesPane : Pane
         }
         if (site.RootFor(folder) is not { } root)
         {
-            Store.Error = $"{folder} isn't in {site.Path}. The document root must be a folder in the project.";
-            Rerender();
+            await Ui.Inform(Window.XamlRoot, "Choose a folder in the project",
+                $"{folder} isn't in {site.Path}. The document root must be a folder in the project.");
             return;
         }
-        await Perform(c => c.UpdateSiteAsync(site.Name, new SiteChange(Root: root)));
+        await Model.Sites.UpdateAsync(site.Name, new SiteChange(Root: root));
     }
 
     /// <summary>Why the site isn't served from its root, and a root set here over the project's.</summary>
@@ -749,7 +749,7 @@ internal sealed partial class SitesPane : Pane
         else if (site.RootSource == Status.VersionSource.Isolated && site.RootPinnedHere)
         {
             yield return Hint($"{RootLabel(site.Root)} is set here; the project sets {RootLabel(site.RootPinned)} in .flockrc.",
-                "Use .flockrc", () => _ = Perform(c => c.UpdateSiteAsync(site.Name, new SiteChange(Root: ""))));
+                "Use .flockrc", () => Start(site.Name, () => Model.Sites.UpdateAsync(site.Name, new SiteChange(Root: ""))));
         }
     }
 
@@ -912,7 +912,7 @@ internal sealed partial class SitesPane : Pane
         await shown;
     }
 
-    private async Task AddDomain(Status.Site site)
+    internal async Task AddDomain(Status.Site site)
     {
         var dns = Model.Status?.Dns;
         var depth = dns?.MaxDepth ?? 4;
@@ -967,8 +967,8 @@ internal sealed partial class SitesPane : Pane
         }
         if ((site.RootState is "" or Status.DocumentRootState.Empty) && site.RootSource != Status.VersionSource.Project)
         {
-            menu.Items.Add(Item($"Pin Document Root ({RootLabel(site.Root)}) to Project…", () => _ = Pin(site, "root", site.Root,
-                $"Writes root={site.Root} to .flockrc in {site.Path}. Commit it, and everyone using Flock on this project serves it from {RootLabel(site.Root)}.")));
+            menu.Items.Add(Item($"Pin Document Root ({RootLabel(site.Root)}) to Project…", () => Start(site.Name, () => Pin(site, "root", site.Root,
+                $"Writes root={site.Root} to .flockrc in {site.Path}. Commit it, and everyone using Flock on this project serves it from {RootLabel(site.Root)}."))));
         }
         if (site.PhpPinnedHere || site.NodePinnedHere || site.RootPinnedHere)
         {
@@ -988,8 +988,8 @@ internal sealed partial class SitesPane : Pane
             }
             if (site.RootPinnedHere)
             {
-                menu.Items.Add(Item("Unpin Document Root (.flockrc)…", () => _ = Unpin(site, "root",
-                    $"Removes root= from .flockrc in {site.Path}. Flock then finds the document root itself.")));
+                menu.Items.Add(Item("Unpin Document Root (.flockrc)…", () => Start(site.Name, () => Unpin(site, "root",
+                    $"Removes root= from .flockrc in {site.Path}. Flock then finds the document root itself."))));
             }
         }
 

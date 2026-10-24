@@ -35,12 +35,8 @@ public sealed class PreferencesService
         this.logger = logger;
     }
 
-#if SCREENSHOTS
-    public static string DefaultPath => Path.Combine(Flock.Kit.FlockPaths.Root, "tray.json");
-#else
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flock", "tray.json");
-#endif
 
     public PreferenceData Snapshot
     {

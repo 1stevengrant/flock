@@ -134,6 +134,6 @@ The windows open on screen, on top of everything, for a few seconds each; the PN
 screen shows, at the display's scale. `tools/screenshots/make-dumps.php` regenerates the Dumps
 fixtures with the dump server's VarDumper. The **Screenshots** workflow does the same in CI.
 
-The project compiles FlockTray's sources with `SCREENSHOTS` defined, plus its own `Program`. The
-few hooks in FlockTray are inside `#if SCREENSHOTS`, so the app that ships has none of it;
-`build.ps1` checks that before the installer is made.
+The project references `FlockTray` through `ProjectReference`, so it renders the same assembly that ships. Its own entry point supplies the theme,
+isolated preferences, and startup callback, with background polling and update checks disabled. Assets flow through the project reference; fixtures
+belong only to the capture runner. `build.ps1` checks that the published tray contains neither the capture runner nor its fixtures.

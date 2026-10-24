@@ -1,11 +1,13 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Flock.Kit.Tests;
 
 public class ClientTests : IDisposable
 {
     private readonly string dir = Directory.CreateTempSubdirectory("flock-client-").FullName;
+    private readonly FakeTimeProvider clock = new();
 
     public void Dispose() => Directory.Delete(dir, recursive: true);
 
@@ -27,10 +29,12 @@ public class ClientTests : IDisposable
     private sealed class WaitingHandler : HttpMessageHandler
     {
         public int Calls { get; private set; }
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
+            Started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         }
@@ -47,7 +51,7 @@ public class ClientTests : IDisposable
     public async Task SendsTheBearerTokenAndDecodesNullListsAsEmpty()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:53531", "secret"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:53531", "secret"), clock);
 
         Assert.Empty(await client.MailAsync());
         Assert.Equal("Bearer secret", handler.Requests[0].Headers.Authorization?.ToString());
@@ -59,7 +63,7 @@ public class ClientTests : IDisposable
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        using (var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:1", "token")))
+        using (var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:1", "token"), clock))
         {
         }
 
@@ -75,7 +79,7 @@ public class ClientTests : IDisposable
             ? new HttpResponseMessage(HttpStatusCode.NoContent)
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null") });
         using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        using var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:53531", "secret"));
+        using var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:53531", "secret"), clock);
 
         Assert.Empty(await client.EventsAsync());
         Assert.Empty(await client.EventsAsync([EventKind.Query, EventKind.Log], limit: 50));
@@ -93,7 +97,7 @@ public class ClientTests : IDisposable
         var handler = new Handler(r => r.Headers.Authorization?.Parameter == "new"
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"services":["web"],"sites":null}""") }
             : new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("""{"error":"missing or invalid token"}""") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path);
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path, clock);
 
         // The daemon restarted with a new token after the client cached the old one.
         await Assert.ThrowsAsync<FlockServerException>(async () =>
@@ -113,7 +117,8 @@ public class ClientTests : IDisposable
         {
             Content = new StringContent(r.Method == HttpMethod.Delete ? "[]" : """{"site":"my app","state":"building","allow":["bob@acme.com"]}"""),
         });
-        using var client = new FlockClient(WriteApiJson("http://127.0.0.1:53531", "secret"), handler);
+        using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var client = new FlockClient(http, WriteApiJson("http://127.0.0.1:53531", "secret"), clock);
 
         var started = await client.StartShareAsync("my app", ["bob@acme.com"], debug: true);
         await client.RebuildShareAsync("my app");
@@ -130,7 +135,7 @@ public class ClientTests : IDisposable
     public async Task ReportsServerErrorsWithTheDaemonsMessage()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("""{"error":"PHP 8.5 is the default version"}""") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         var error = await Assert.ThrowsAsync<FlockServerException>(() => client.UninstallPhpAsync("8.5"));
         Assert.Equal(409, error.StatusCode);
@@ -141,11 +146,11 @@ public class ClientTests : IDisposable
     [Fact]
     public async Task IsNotRunningWithoutApiJsonOrListener()
     {
-        using var missing = new FlockClient(new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, Path.Combine(dir, "nope.json"));
+        using var missing = new FlockClient(new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, Path.Combine(dir, "nope.json"), clock);
         await Assert.ThrowsAsync<FlockNotRunningException>(() => missing.StatusAsync());
 
         var refusedHandler = new Handler(_ => throw new HttpRequestException("connection refused"));
-        using var refused = new FlockClient(new HttpClient(refusedHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var refused = new FlockClient(new HttpClient(refusedHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
         await Assert.ThrowsAsync<FlockNotRunningException>(() => refused.StatusAsync());
     }
 
@@ -155,7 +160,7 @@ public class ClientTests : IDisposable
         var path = Path.Combine(dir, "invalid-api.json");
         File.WriteAllText(path, "not json");
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        using var client = new FlockClient(http, path);
+        using var client = new FlockClient(http, path, clock);
 
         var error = await Assert.ThrowsAsync<FlockNotRunningException>(() => client.StatusAsync());
 
@@ -169,7 +174,7 @@ public class ClientTests : IDisposable
         {
             Content = new StringContent("""{"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z"}"""),
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.LinkSiteAsync(@"C:\code\shop");
         Assert.Equal("""{"path":"C:\\code\\shop","secured":false}""", handler.Bodies[0]);
@@ -179,7 +184,7 @@ public class ClientTests : IDisposable
     public async Task GivesSlowEndpointsLongerThanTheDefault()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.StatusAsync();
         // The daemon may ask nodejs.org first (~30 s on a cold cache).
@@ -199,7 +204,7 @@ public class ClientTests : IDisposable
     public async Task CallsThePostgresVersionEndpoints()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"active":"18","majors":[]}""") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.PostgresVersionsAsync();
         await client.CheckPostgresReleasesAsync();
@@ -230,7 +235,7 @@ public class ClientTests : IDisposable
         {
             Content = new StringContent(r.RequestUri!.AbsolutePath.EndsWith("/log") ? "==> Downloading\n" : """{"services":[{"id":"mysql"}]}"""),
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.CatalogAsync();
         await client.CheckCatalogAsync();
@@ -267,7 +272,7 @@ public class ClientTests : IDisposable
         {
             Content = new StringContent(r.RequestUri!.AbsolutePath.EndsWith("/log") ? "downloading…\n" : """{"available":true,"builds":[{"php":"8.4"}]}"""),
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         var state = await client.FrankenPhpAsync();
         Assert.Equal("8.4", state.Builds[0].Php);
@@ -298,7 +303,7 @@ public class ClientTests : IDisposable
         {
             Content = new StringContent("""{"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z"}"""),
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.UpdateSiteAsync("shop", new SiteChange(Server: Status.SiteServer.FrankenPhp));
         await client.UpdateSiteAsync("shop", new SiteChange(Worker: ""));
@@ -317,7 +322,7 @@ public class ClientTests : IDisposable
     public async Task ReportsAMissingCatalogLogAsAServerError()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("""{"error":"no log for redis"}""") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         var error = await Assert.ThrowsAsync<FlockServerException>(() => client.CatalogLogAsync("redis"));
         Assert.Equal(404, error.StatusCode);
@@ -338,7 +343,7 @@ public class ClientTests : IDisposable
             }
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"services\":[],\"sites\":[]}") };
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path);
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path, clock);
 
         await client.LogsAsync();
 
@@ -361,7 +366,7 @@ public class ClientTests : IDisposable
             }
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path);
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, path, clock);
 
         var error = await Assert.ThrowsAsync<FlockRequestOutcomeUnknownException>(() => client.UpdateSettingsAsync(new SettingsChange(Dumps: true)));
         Assert.Same(cause, error.InnerException);
@@ -387,7 +392,7 @@ public class ClientTests : IDisposable
             }
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(messages) };
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         await Assert.ThrowsAsync<FlockRequestOutcomeUnknownException>(() => client.ClearMailAsync());
         var current = await client.MailAsync();
@@ -400,7 +405,7 @@ public class ClientTests : IDisposable
     public async Task DoesNotReplayAPatchAfterItsTransportFails()
     {
         var handler = new Handler(_ => throw new HttpRequestException("connection reset"));
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         await Assert.ThrowsAsync<FlockRequestOutcomeUnknownException>(() => client.SetServicePortAsync("mysql", 3307));
 
@@ -414,7 +419,7 @@ public class ClientTests : IDisposable
         var handler = new Handler(r => ++calls == 1
             ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         await client.UpdateSettingsAsync(new SettingsChange(Dumps: true));
 
@@ -429,7 +434,7 @@ public class ClientTests : IDisposable
         var readHandler = new Handler(r => ++readCalls == 1
             ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
             : throw readCause);
-        using var readClient = new FlockClient(new HttpClient(readHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var readClient = new FlockClient(new HttpClient(readHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         var readError = await Assert.ThrowsAsync<FlockNotRunningException>(() => readClient.StatusAsync());
         Assert.Same(readCause, readError.InnerException);
@@ -440,7 +445,7 @@ public class ClientTests : IDisposable
         var writeHandler = new Handler(r => ++writeCalls == 1
             ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
             : throw writeCause);
-        using var writeClient = new FlockClient(new HttpClient(writeHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var writeClient = new FlockClient(new HttpClient(writeHandler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         var writeError = await Assert.ThrowsAsync<FlockRequestOutcomeUnknownException>(() => writeClient.UpdateSettingsAsync(new SettingsChange(Dumps: true)));
         Assert.Same(writeCause, writeError.InnerException);
@@ -451,7 +456,7 @@ public class ClientTests : IDisposable
     public async Task KeepsTheInnerCauseWhenAResponseCannotBeDecoded()
     {
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("not json") });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
         var error = await Assert.ThrowsAsync<FlockException>(() => client.StatusAsync());
 
@@ -462,10 +467,13 @@ public class ClientTests : IDisposable
     public async Task CallerCancellationIsNotRetriedOrWrapped()
     {
         var handler = new WaitingHandler();
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
+        using var cancellation = new CancellationTokenSource();
 
-        var error = await Assert.ThrowsAsync<TaskCanceledException>(() => client.UpdateSettingsAsync(new SettingsChange(Dumps: true), cancellation.Token));
+        var request = client.UpdateSettingsAsync(new SettingsChange(Dumps: true), cancellation.Token);
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        cancellation.Cancel();
+        var error = await Assert.ThrowsAsync<TaskCanceledException>(() => request);
 
         Assert.IsAssignableFrom<OperationCanceledException>(error);
         Assert.Equal(1, handler.Calls);
@@ -475,9 +483,14 @@ public class ClientTests : IDisposable
     public async Task EndpointTimeoutIsVisibleWithItsCancellationCause()
     {
         var handler = new WaitingHandler();
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "token"), clock);
 
-        var error = await Assert.ThrowsAsync<FlockException>(() => client.StatusAsync());
+        var request = client.StatusAsync();
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        clock.Advance(TimeSpan.FromSeconds(4));
+        Assert.False(request.IsCompleted);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var error = await Assert.ThrowsAsync<FlockException>(() => request);
 
         Assert.Equal("Flock did not answer GET /v1/status in time", error.Message);
         Assert.IsAssignableFrom<OperationCanceledException>(error.InnerException);
@@ -493,7 +506,7 @@ public class ClientTests : IDisposable
                 ? """{"version":"dev","pid":1,"started_at":"2026-10-13T14:10:01Z","sites":[]}"""
                 : """{"clients":[{"id":"cursor","name":"Cursor","state":"registered"}],"command":"flock.exe","args":["mcp"],"snippet":"{}"}"""),
         });
-        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"));
+        using var client = new FlockClient(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, WriteApiJson("http://127.0.0.1:1", "t"), clock);
 
         await client.McpAsync();
         var added = await client.RegisterMcpAsync("cursor");

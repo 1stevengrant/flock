@@ -62,6 +62,15 @@ public sealed class SitesService : IAsyncDisposable
     public Task<OperationOutcome> AddBoostGuidelineAsync(string site, CancellationToken token = default) =>
         MutateAsync(Key(site), site, (_, cancellationToken) => client.AddBoostGuidelineAsync(site, cancellationToken), token);
 
+    public Task<OperationOutcome> StartShareAsync(string site, IReadOnlyList<string> allow, bool debug, CancellationToken token = default) =>
+        MutateAsync(Key(site), site, (_, cancellationToken) => client.StartShareAsync(site, allow, debug, cancellationToken), token);
+
+    public Task<OperationOutcome> RebuildShareAsync(string site, CancellationToken token = default) =>
+        MutateAsync(Key(site), site, (_, cancellationToken) => client.RebuildShareAsync(site, cancellationToken), token);
+
+    public Task<OperationOutcome> StopShareAsync(string site, CancellationToken token = default) =>
+        MutateAsync(Key(site), site, (_, cancellationToken) => client.StopShareAsync(site, cancellationToken), token);
+
     /// <summary>Reads one selected site's extensions. A new site retires the prior read; equivalent reads join.</summary>
     public async Task<(ExtensionReport? Report, string? Error)> SiteExtensionsAsync(string site, CancellationToken token = default)
     {
