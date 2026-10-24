@@ -167,6 +167,8 @@ public sealed class PanelSiteRow(Status.Site value) : ObservableObject
     public bool Debugging => current.Debugging;
     public bool IsFrankenPhp => current.IsFrankenPhp;
     public string Worker => current.Worker;
+    public bool IsShared => current.IsShared;
+    public string? ShareUrl => current.Share?.Url;
 
     public void Update(Status.Site value)
     {

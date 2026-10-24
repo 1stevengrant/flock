@@ -302,6 +302,12 @@ internal sealed partial class SitesPane : Pane
                 ToolTipService.SetToolTip(secured, "Served over HTTPS");
                 marks.Children.Add(secured);
             }
+            if (site.IsShared)
+            {
+                var shared = Ui.Badge("Shared", Ui.Tone.Success);
+                ToolTipService.SetToolTip(shared, $"Shared at {site.Share!.Url}");
+                marks.Children.Add(shared);
+            }
             Content = Ui.Spread(text, marks);
             Background = Ui.Brush(row.IsSelected ? "SubtleFillColorSecondaryBrush" : "CardBackgroundFillColorDefaultBrush");
             BorderBrush = row.IsSelected ? Ui.Accent : Ui.Brush("CardStrokeColorDefaultBrush");

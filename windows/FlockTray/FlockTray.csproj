@@ -44,6 +44,7 @@
     <ItemGroup>
         <ProjectReference Include="..\FlockKit\FlockKit.csproj"/>
         <InternalsVisibleTo Include="FlockScreenshots"/>
+        <InternalsVisibleTo Include="FlockTray.Tests"/>
     </ItemGroup>
     <ItemGroup>
         <Content Include="Assets\*.ico;Assets\*.png" CopyToOutputDirectory="PreserveNewest"/>

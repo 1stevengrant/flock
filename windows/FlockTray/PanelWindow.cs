@@ -25,21 +25,21 @@ internal sealed partial class PanelWindow : Window
     private readonly IntPtr hwnd;
     private readonly ScrollViewer scroller = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly StackPanel root = new() { Spacing = 12, Padding = new Thickness(16) };
-    private readonly ContentControl headerSlot = new();
-    private readonly ContentControl updateSlot = new();
-    private readonly ContentControl errorSlot = new();
-    private readonly ContentControl contentSlot = new();
-    private readonly ContentControl footerSlot = new();
+    private readonly ContentControl headerSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl updateSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl errorSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl contentSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl footerSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel serviceRows = Ui.Column(5);
     private readonly StackPanel siteRows = Ui.Column(2);
     private readonly StackPanel togglesRows = Ui.Column(2);
     private readonly ScrollViewer sitesScroller = new() { MaxHeight = 240, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly StackPanel statusContent = Ui.Column(12);
-    private readonly ContentControl warningsSlot = new();
+    private readonly ContentControl warningsSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel servicesSection = Ui.Column(5);
     private readonly StackPanel sitesSection = Ui.Column(4);
-    private readonly ContentControl sitesEmptySlot = new();
-    private readonly ContentControl shortcutsSlot = new();
+    private readonly ContentControl sitesEmptySlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl shortcutsSlot = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly KeyedRowsBinding<string, PanelServiceRow> serviceBinding;
     private readonly KeyedRowsBinding<string, PanelSiteRow> siteBinding;
     private ToggleSwitch? xdebugToggle;
@@ -402,7 +402,8 @@ internal sealed partial class PanelWindow : Window
             // Restart and Settings need the daemon; the panel's Set Up button is the way on.
             return Ui.Spread(Ui.Row(4), quit);
         }
-        var restart = Ui.AsyncButton("Restart", model.RestartAsync);
+        var restart = new HyperlinkButton { Content = "Restart", Padding = new Thickness(4, 2, 4, 2) };
+        restart.Click += async (_, _) => await model.RestartAsync();
         restart.IsEnabled = model.IsRunning && !model.IsRestarting;
         var settings = Ui.Link("Settings…", () => App.Current.Open(WindowKind.Settings));
         return Ui.Spread(Ui.Row(4, restart, settings), quit);
@@ -508,6 +509,12 @@ internal sealed partial class PanelWindow : Window
             if (row.IsFrankenPhp)
             {
                 php = Ui.Row(6, Ui.Badge(row.Worker == Status.SiteServer.Octane ? "Octane" : "FrankenPHP", Ui.Tone.Neutral), php);
+            }
+            if (row.IsShared)
+            {
+                var shared = Ui.Badge("Shared", Ui.Tone.Success);
+                ToolTipService.SetToolTip(shared, $"Shared at {row.ShareUrl}");
+                php = Ui.Row(6, shared, php);
             }
             button.Content = Ui.Spread(Ui.Row(8, icon, name), php);
             button.IsEnabled = row.Url is not null;

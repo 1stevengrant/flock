@@ -71,6 +71,8 @@ public sealed class WindowsAuthenticodeVerifier : IAuthenticodeVerifier
     private const uint CertQueryObjectFile = 1;
     private const uint CertQueryContentFlagPkcs7SignedEmbed = 0x00000400;
     private const uint CertQueryFormatFlagBinary = 2;
+    private const uint CmsgSignerCertInfoParam = 7;
+    private const uint CertFindSubjectCert = 0x000B0000;
 
     public AuthenticodeVerification Verify(string path)
     {
@@ -78,23 +80,34 @@ public sealed class WindowsAuthenticodeVerifier : IAuthenticodeVerifier
         return new AuthenticodeVerification(trustCode, trustCode == 0 ? ReadPublisher(path) : null);
     }
 
-    private static string ReadPublisher(string path)
+    internal static string ReadPublisher(string path)
     {
         if (!CryptQueryObject(CertQueryObjectFile, path, CertQueryContentFlagPkcs7SignedEmbed,
-                CertQueryFormatFlagBinary, 0, out _, out _, out _, out var store, out var message, out _))
+                CertQueryFormatFlagBinary, 0, out var encoding, out _, out _, out var store, out var message, out _))
         {
             throw new CryptographicException(Marshal.GetLastWin32Error());
         }
 
-        var context = CertEnumCertificatesInStore(store, IntPtr.Zero);
-        if (context == IntPtr.Zero)
-        {
-            CryptMsgClose(message);
-            CertCloseStore(store, 0);
-            throw new CryptographicException(Marshal.GetLastWin32Error());
-        }
+        var context = IntPtr.Zero;
+        var signerInfo = IntPtr.Zero;
         try
         {
+            // Identify the signer by issuer and serial number, never by certificate-store order.
+            uint size = 0;
+            if (!CryptMsgGetParam(message, CmsgSignerCertInfoParam, 0, IntPtr.Zero, ref size))
+            {
+                throw new CryptographicException(Marshal.GetLastWin32Error());
+            }
+            signerInfo = Marshal.AllocHGlobal(checked((int)size));
+            if (!CryptMsgGetParam(message, CmsgSignerCertInfoParam, 0, signerInfo, ref size))
+            {
+                throw new CryptographicException(Marshal.GetLastWin32Error());
+            }
+            context = CertFindCertificateInStore(store, encoding, 0, CertFindSubjectCert, signerInfo, IntPtr.Zero);
+            if (context == IntPtr.Zero)
+            {
+                throw new CryptographicException(Marshal.GetLastWin32Error());
+            }
             var certificate = Marshal.PtrToStructure<CERT_CONTEXT>(context);
             var bytes = new byte[certificate.cbCertEncoded];
             Marshal.Copy(certificate.pbCertEncoded, bytes, 0, bytes.Length);
@@ -105,7 +118,11 @@ public sealed class WindowsAuthenticodeVerifier : IAuthenticodeVerifier
         }
         finally
         {
-            CertFreeCertificateContext(context);
+            if (context != IntPtr.Zero)
+            {
+                CertFreeCertificateContext(context);
+            }
+            Marshal.FreeHGlobal(signerInfo);
             CryptMsgClose(message);
             CertCloseStore(store, 0);
         }
@@ -139,7 +156,11 @@ public sealed class WindowsAuthenticodeVerifier : IAuthenticodeVerifier
     private static extern bool CertFreeCertificateContext(IntPtr certificateContext);
 
     [DllImport("Crypt32.dll", SetLastError = true)]
-    private static extern IntPtr CertEnumCertificatesInStore(IntPtr certificateStore, IntPtr previousCertificateContext);
+    private static extern bool CryptMsgGetParam(IntPtr message, uint parameter, uint index, IntPtr data, ref uint size);
+
+    [DllImport("Crypt32.dll", SetLastError = true)]
+    private static extern IntPtr CertFindCertificateInStore(IntPtr certificateStore, uint encoding, uint flags,
+        uint findType, IntPtr findParameter, IntPtr previousCertificateContext);
 
     [DllImport("Crypt32.dll", SetLastError = true)]
     private static extern bool CryptMsgClose(IntPtr message);

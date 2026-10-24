@@ -250,13 +250,14 @@ internal static class Ui
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    public enum Tone { Accent, Neutral, Caution, Critical }
+    public enum Tone { Accent, Neutral, Caution, Critical, Success }
 
     /// <summary>A small capsule label such as "Default".</summary>
     public static Border Badge(string text, Tone tone = Tone.Accent)
     {
         var (fg, bg) = tone switch
         {
+            Tone.Success => (Success, Brush("SystemFillColorSuccessBackgroundBrush")),
             Tone.Caution => (Caution, Brush("SystemFillColorCautionBackgroundBrush")),
             Tone.Critical => (Critical, Brush("SystemFillColorCriticalBackgroundBrush")),
             Tone.Neutral => (SecondaryText, Brush("ControlFillColorSecondaryBrush")),
