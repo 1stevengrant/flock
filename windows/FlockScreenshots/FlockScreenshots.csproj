@@ -39,9 +39,9 @@
         <ProjectReference Include="..\FlockKit\FlockKit.csproj" />
     </ItemGroup>
     <ItemGroup>
-        <Compile Include="..\FlockTray\**\*.cs" Exclude="..\FlockTray\Program.cs;..\FlockTray\bin\**;..\FlockTray\obj\**" LinkBase="FlockTray" />
-        <Content Include="..\FlockTray\Assets\*.ico;..\FlockTray\Assets\*.png" Link="Assets\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-        <Content Include="..\..\tools\screenshots\fixtures\**\*" Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+        <Compile Include="..\FlockTray\**\*.cs" Exclude="..\FlockTray\Program.cs;..\FlockTray\bin\**;..\FlockTray\obj\**" LinkBase="FlockTray" Visible="false" />
+        <Content Include="..\FlockTray\Assets\*.ico;..\FlockTray\Assets\*.png" Link="Assets\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+        <Content Include="..\..\tools\screenshots\fixtures\**\*" Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     </ItemGroup>
     <!-- Hide SDK payload links in the IDE while keeping their output-copy metadata. -->
     <Target Name="HideWindowsAppSDKPayloadLinks" AfterTargets="AddMicrosoftWindowsAppSDKPayloadFilesFromComponents">
