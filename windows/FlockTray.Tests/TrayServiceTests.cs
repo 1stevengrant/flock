@@ -4,6 +4,18 @@ namespace Flock.Tray.Tests;
 
 public sealed class TrayServiceTests
 {
+    [Fact]
+    public async Task RealNativeTrayCanStartAndReleaseItsWindow()
+    {
+        using var tray = new TrayService(new Win32TrayNativeApi());
+
+        await tray.StartAsync(Path.Combine(AppContext.BaseDirectory, "Assets", "Tray.Dark.ico"), "Flock test");
+
+        Assert.NotEqual(IntPtr.Zero, tray.Handle);
+        tray.Dispose();
+        Assert.Equal(IntPtr.Zero, tray.Handle);
+    }
+
     [Theory]
     [InlineData(Failure.RegisterMessage)]
     [InlineData(Failure.RegisterClass)]
@@ -137,13 +149,13 @@ public sealed class TrayServiceTests
         public List<TrayNotifyOperation> NotifyCalls { get; } = [];
         public List<IntPtr> ModifyIcons { get; } = [];
         public List<string> Calls { get; } = [];
-        private Func<TrayNativeMessage, IntPtr>? callback;
+        private Func<TrayNativeMessage, IntPtr?>? callback;
 
         public IntPtr ModuleHandle() => (IntPtr)7;
 
         public int RegisterWindowMessage(string name) => Failure == Failure.RegisterMessage ? 0 : TaskbarMessage;
 
-        public ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr> callback, out bool alreadyRegistered, out int lastError)
+        public ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr?> callback, out bool alreadyRegistered, out int lastError)
         {
             this.callback = callback;
             alreadyRegistered = AlreadyRegistered;

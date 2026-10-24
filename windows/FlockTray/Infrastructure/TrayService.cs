@@ -27,7 +27,8 @@ public interface ITrayNativeApi
 {
     IntPtr ModuleHandle();
     int RegisterWindowMessage(string name);
-    ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr> callback, out bool alreadyRegistered, out int lastError);
+    // A null callback result delegates the message to DefWindowProcW; zero is a handled result.
+    ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr?> callback, out bool alreadyRegistered, out int lastError);
     IntPtr CreateWindow(string className, IntPtr instance, out int lastError);
     IntPtr LoadImage(string path, IntPtr window, out int lastError);
     bool Notify(TrayNotifyOperation operation, TrayNotification notification);
@@ -341,13 +342,13 @@ public sealed class TrayService : ITrayIcon, IDisposable
     private bool Notify(TrayNotifyOperation operation, IntPtr handle, string tip) =>
         native.Notify(operation, new TrayNotification(window, handle, tip));
 
-    private IntPtr Dispatch(TrayNativeMessage message)
+    private IntPtr? Dispatch(TrayNativeMessage message)
     {
         try
         {
             if (message.Window != window)
             {
-                return IntPtr.Zero;
+                return null;
             }
             if (message.Message == Native.WM_TRAY)
             {
@@ -394,7 +395,7 @@ public sealed class TrayService : ITrayIcon, IDisposable
         {
             ReportFailure(error, "tray callback");
         }
-        return IntPtr.Zero;
+        return null;
     }
 
     private void Publish(Action? callback)

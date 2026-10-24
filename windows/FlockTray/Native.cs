@@ -378,7 +378,7 @@ internal static partial class Native
     [DllImport("user32.dll")]
     private static extern bool DestroyWindow(IntPtr hwnd);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr DefWindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -413,11 +413,11 @@ internal static partial class Native
 
     private static readonly object trayGate = new();
     private static WndProc? trayProc; // kept alive while Windows can call the class procedure
-    private static Func<TrayNativeMessage, IntPtr>? trayCallback;
+    private static Func<TrayNativeMessage, IntPtr?>? trayCallback;
 
     internal static IntPtr ModuleHandle() => GetModuleHandle(null);
 
-    internal static ushort RegisterTrayClass(string className, Func<TrayNativeMessage, IntPtr> callback, out bool alreadyRegistered, out int error)
+    internal static ushort RegisterTrayClass(string className, Func<TrayNativeMessage, IntPtr?> callback, out bool alreadyRegistered, out int error)
     {
         lock (trayGate)
         {
@@ -531,7 +531,8 @@ internal static partial class Native
                 text = Marshal.PtrToStringUni(lParam);
             }
             var callback = trayCallback;
-            return callback is null ? DefWindowProc(hwnd, msg, wParam, lParam) : callback(new TrayNativeMessage(hwnd, msg, wParam, lParam, link, text));
+            return callback?.Invoke(new TrayNativeMessage(hwnd, msg, wParam, lParam, link, text))
+                ?? DefWindowProc(hwnd, msg, wParam, lParam);
         }
         catch
         {

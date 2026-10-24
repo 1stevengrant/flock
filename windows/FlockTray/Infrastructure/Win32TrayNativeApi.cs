@@ -7,7 +7,7 @@ public sealed class Win32TrayNativeApi : ITrayNativeApi
 
     public int RegisterWindowMessage(string name) => Native.RegisterTrayWindowMessage(name);
 
-    public ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr> callback, out bool alreadyRegistered, out int lastError) =>
+    public ushort RegisterClass(string name, Func<TrayNativeMessage, IntPtr?> callback, out bool alreadyRegistered, out int lastError) =>
         Native.RegisterTrayClass(name, callback, out alreadyRegistered, out lastError);
 
     public IntPtr CreateWindow(string className, IntPtr instance, out int lastError) => Native.CreateTrayWindow(className, instance, out lastError);
