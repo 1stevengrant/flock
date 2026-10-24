@@ -35,9 +35,9 @@ public sealed class UpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DevelopmentBuildRejectsAllUpdateEntryPoints()
+    public async Task UnversionedBuildRejectsAllUpdateEntryPoints()
     {
-        metadata.Current = new UpdateInstallationMetadata(development: true).CurrentVersion;
+        metadata.Current = null;
 
         Assert.False(service.IsEnabled);
         Assert.Equal(OperationOutcome.Rejected, await service.CheckAsync(userInitiated: true));

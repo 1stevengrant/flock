@@ -109,7 +109,6 @@ public sealed class PreferencesService
             temporary = path + ".tmp." + Guid.NewGuid().ToString("N");
             await WriteTemporaryAsync(temporary, next, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.Move(temporary, path, overwrite: true);
             temporary = null;
             committed = true;
@@ -181,6 +180,7 @@ public sealed class PreferencesService
     private static Task WriteTemporaryAsync(string file, PreferenceData value, CancellationToken cancellationToken) => Task.Run(async () =>
     {
         var data = JsonSerializer.Serialize(value, JsonOptions);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         await using var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None,
             bufferSize: 4096, options: FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var writer = new StreamWriter(stream);

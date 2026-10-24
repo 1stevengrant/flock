@@ -16,9 +16,9 @@ public interface IUpdateInstallationMetadata
     string DownloadDirectory { get; }
 }
 
-public sealed class UpdateInstallationMetadata(bool development = false) : IUpdateInstallationMetadata
+public sealed class UpdateInstallationMetadata : IUpdateInstallationMetadata
 {
-    public AppVersion? CurrentVersion => development ? null : UpdateService.Current;
+    public AppVersion? CurrentVersion => UpdateService.Current;
     public Version OperatingSystemVersion => Environment.OSVersion.Version;
     public string DownloadDirectory => Path.Combine(Path.GetTempPath(), "Flock");
 }

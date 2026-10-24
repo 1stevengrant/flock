@@ -53,6 +53,34 @@ public sealed class PreferencesTests
     }
 
     [Fact]
+    public async Task FirstSaveCreatesMissingParentDirectoriesAndPersistsPreferences()
+    {
+        var directory = Directory.CreateTempSubdirectory("flock-preferences-");
+        try
+        {
+            var parent = Path.Combine(directory.FullName, "dev", "new-build");
+            var path = Path.Combine(parent, "tray.json");
+            var service = new PreferencesService(path);
+            Assert.Equal(new PreferenceData(), await service.LoadAsync());
+            Assert.False(Directory.Exists(parent));
+            PreferenceData? published = null;
+            service.Changed += value => published = value;
+
+            var saved = await service.UpdateAsync(value => value with { Channel = "beta" });
+
+            Assert.Equal("beta", saved.Channel);
+            Assert.Equal(saved, published);
+            Assert.Equal(saved, await new PreferencesService(path).LoadAsync());
+            Assert.Null(service.ActionError);
+            Assert.Empty(Directory.GetFiles(parent, "*.tmp.*"));
+        }
+        finally
+        {
+            Directory.Delete(directory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentUpdatesMergeInsideTheSaveGate()
     {
         var directory = Directory.CreateTempSubdirectory("flock-preferences-");

@@ -106,7 +106,7 @@ internal sealed class GeneralPane(SettingsWindow window, RuntimeService model) :
         var updater = Model.UpdateService;
         if (!updater.IsEnabled || Features.Update.UpdateService.Current is not { } current)
         {
-            return Ui.Setting("Flock", "Updates are off in development builds.", null);
+            return Ui.Setting("Flock", "Updates need a version such as 1.0.0. Set InformationalVersion when building to test updates.", null);
         }
         var idle = !updater.IsBusy;
         var summary = updater.Summary;

@@ -92,7 +92,7 @@ public sealed class AppHost : IAsyncDisposable
                 path: options.PreferencesPath, dispatcher: services.GetService<IUiDispatcher>(), log: error => logSink.TryWrite($"{DateTimeOffset.Now:O} preferences: {error}")));
             builder.Services.AddSingleton<InstallationService>();
             builder.Services.AddSingleton<OperationRunner>();
-            builder.Services.AddSingleton<IUpdateInstallationMetadata>(new UpdateInstallationMetadata(options.Identity.IsDevelopment));
+            builder.Services.AddSingleton<IUpdateInstallationMetadata, UpdateInstallationMetadata>();
             builder.Services.AddSingleton<IUpdateFileCleanup, UpdateFileCleanup>();
             builder.Services.AddSingleton<IAuthenticodeVerifier, WindowsAuthenticodeVerifier>();
             builder.Services.AddSingleton<IUpdateFileVerifier, UpdateFileVerifier>();

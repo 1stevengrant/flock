@@ -94,9 +94,14 @@ from an installed directory.
 Each local executable path has its own single-instance mutex and activation window. Starting that executable again opens its existing dev window;
 it never hands the launch to the installed production tray. Windows show `[Dev]`, and the tray tooltip and panel header show **Flock Dev**.
 
-Dev builds use separate tray preferences and WebView2 data under `%LocalAppData%\Flock\Flock.Tray.Dev.<path-hash>`. App updates and automatic bundled
-CLI replacement are disabled. The dev tray still connects to the installed daemon by default: its sites, services, and daemon version are real,
+Dev builds use separate tray preferences and WebView2 data under `%LocalAppData%\Flock\Flock.Tray.Dev.<path-hash>`. Versioned dev builds support the
+same update checks, signature verification, and installer launch as production. The downloaded installer updates the installed app, not the local build output.
+Automatic bundled CLI replacement is disabled. The dev tray still connects to the installed daemon by default: its sites, services, and daemon version are real,
 and actions in the dev UI affect that daemon. `FLOCK_HOME` still selects a different daemon data folder when needed.
+
+Rider's default build uses version `0.1.0`, so updates can be tested directly. To test from a specific version, build with
+`dotnet build windows/FlockTray -p:Platform=x64 -p:InformationalVersion=1.0.0`. For `windows/build.ps1`, set `FLOCK_VERSION=1.0.0` first;
+its default Git description may not be a version the updater can compare.
 
 ### First-run checklist
 
