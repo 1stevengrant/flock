@@ -262,8 +262,12 @@ func TestWithdrawnBuildsAreReplaced(t *testing.T) {
 	}
 	waitJob(t, m, "mysql", func(e Entry) bool {
 		cfg, _ := config.Load(root)
-		return e.Job == nil && cfg.Services.Extras["mysql"].Build == 2
+		return e.Job != nil || cfg.Services.Extras["mysql"].Build == 2
 	})
+	m.Wait()
+	if cfg, _ := config.Load(root); cfg.Services.Extras["mysql"].Build != 2 {
+		t.Fatalf("replacement build: %+v", cfg.Services)
+	}
 	if e, _ := m.Catalog().Find("mysql"); e.Yanked != "" || e.Update {
 		t.Fatalf("after the replacement: %+v", e)
 	}
