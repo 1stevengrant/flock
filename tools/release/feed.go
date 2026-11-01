@@ -14,7 +14,7 @@ import (
 )
 
 // The oldest systems the builds run on: LSMinimumSystemVersion in macos/build-app.sh and
-// SupportedOSPlatformVersion in windows/FlockTray/FlockTray.csproj.
+// SupportedOSPlatformVersion in windows/Flock.Tray/Flock.Tray.csproj.
 const (
 	minimumMacOS   = "15.0"
 	minimumWindows = "10.0.19041"

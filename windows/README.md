@@ -1,16 +1,16 @@
 # Flock for Windows
 
 The Windows version is the same Go daemon and CLI as on macOS (`cmd/flock`), plus a native
-WinUI 3 tray app (`windows/FlockTray`) that mirrors the macOS menu bar app: a panel from the
+WinUI 3 tray app (`windows/Flock.Tray`) that mirrors the macOS menu bar app: a panel from the
 notification area icon, and the Mail, Dumps, Logs and Settings windows.
 
 ```
 windows/
-  FlockKit/         models + API client (net10.0, no UI — the macOS app's FlockKit)
-  FlockKit.Tests/   xUnit tests, run anywhere: dotnet test windows/FlockKit.Tests
-  FlockTray.Tests/  tray state tests, run on Windows: dotnet test windows/FlockTray.Tests -p:Platform=x64
-  FlockTray/        the WinUI 3 app (unpackaged, self-contained Windows App SDK)
-  FlockScreenshots/ the app's windows with demo data, as PNGs for the docs (never shipped)
+  Flock.Kit/         models + API client (net10.0, no UI — the macOS app's FlockKit)
+  Flock.Kit.Tests/   xUnit tests, run anywhere: dotnet test windows/Flock.Kit.Tests
+  Flock.Tray.Tests/  tray state tests, run on Windows: dotnet test windows/Flock.Tray.Tests -p:Platform=x64
+  Flock.Tray/        the WinUI 3 app (unpackaged, self-contained Windows App SDK)
+  Flock.Screenshots/ the app's windows with demo data, as PNGs for the docs (never shipped)
   installer/        the Inno Setup script for Flock-Setup-x64.exe
   build.ps1         tests + publishes FlockTray to windows\dist\FlockTray-x64\
   build-installer.ps1  the CLI, the hosts helper, build.ps1 and the installer around them
@@ -22,7 +22,7 @@ runtime-only behavior. It uses the same WinUI controls, and the project compiles
 checking) on macOS and Linux too:
 
 ```sh
-dotnet msbuild windows/FlockTray -restore -t:Compile -p:RuntimeIdentifier=win-x64 -p:Platform=x64 -p:WindowsAppSDKSelfContained=false
+dotnet msbuild windows/Flock.Tray -restore -t:Compile -p:RuntimeIdentifier=win-x64 -p:Platform=x64 -p:WindowsAppSDKSelfContained=false
 ```
 
 Running and publishing it needs Windows (the Windows App SDK's packaging tools are Windows programs).
@@ -88,7 +88,7 @@ fails, or a service hasn't exited after 10 seconds, it is killed. php-cgi worker
 
 ### Running the development tray alongside an installed copy
 
-Run `dotnet run --project windows/FlockTray -p:Platform=x64` from the repository root, or launch the executable produced by `windows/build.ps1`.
+Run `dotnet run --project windows/Flock.Tray -p:Platform=x64` from the repository root, or launch the executable produced by `windows/build.ps1`.
 An executable without the installer's adjacent `unins000.exe` runs as **Flock Dev**, in Debug or Release. Use `--dev` to force this mode when testing
 from an installed directory.
 
@@ -101,7 +101,7 @@ Automatic bundled CLI replacement is disabled. The dev tray still connects to th
 and actions in the dev UI affect that daemon. `FLOCK_HOME` still selects a different daemon data folder when needed.
 
 Rider's default build uses version `0.1.0`, so updates can be tested directly. To test from a specific version, build with
-`dotnet build windows/FlockTray -p:Platform=x64 -p:InformationalVersion=1.0.0`. For `windows/build.ps1`, set `FLOCK_VERSION=1.0.0` first;
+`dotnet build windows/Flock.Tray -p:Platform=x64 -p:InformationalVersion=1.0.0`. For `windows/build.ps1`, set `FLOCK_VERSION=1.0.0` first;
 its default Git description may not be a version the updater can compare.
 
 ### First-run checklist
@@ -137,13 +137,13 @@ Logs: `%AppData%\Flock\log\` (daemon.log, web.log, php8.x-cgi.log, php8.x-instal
 
 ## Screenshots for the docs
 
-`FlockScreenshots` renders the tray app's windows with demo data, for the website's docs: every
-shot in `FlockScreenshots/Screenshots.cs`, in the light and the dark theme, as
+`Flock.Screenshots` renders the tray app's windows with demo data, for the website's docs: every
+shot in `Flock.Screenshots/Screenshots.cs`, in the light and the dark theme, as
 `{shot}-windows-{light|dark}.png` (the shot ids are the website's `screenshot:…` placeholders).
 
 ```powershell
-dotnet build windows/FlockScreenshots -c Release -p:Platform=x64
-windows\FlockScreenshots\bin\x64\Release\net10.0-windows10.0.22621.0\win-x64\FlockScreenshots.exe --out screenshots
+dotnet build windows/Flock.Screenshots -c Release -p:Platform=x64
+windows\Flock.Screenshots\bin\x64\Release\net10.0-windows10.0.22621.0\win-x64\Flock.Screenshots.exe --out screenshots
 # or a few: --only settings-php,mail-window   one theme: --theme dark
 ```
 
@@ -153,6 +153,6 @@ The windows open on screen, on top of everything, for a few seconds each; the PN
 screen shows, at the display's scale. `tools/screenshots/make-dumps.php` regenerates the Dumps
 fixtures with the dump server's VarDumper. The **Screenshots** workflow does the same in CI.
 
-The project references `FlockTray` through `ProjectReference`, so it renders the same assembly that ships. Its own entry point supplies the theme,
+The project references `Flock.Tray` through `ProjectReference`, so it renders the same assembly that ships. Its own entry point supplies the theme,
 isolated preferences, and startup callback, with background polling and update checks disabled. Assets flow through the project reference; fixtures
 belong only to the capture runner. `build.ps1` checks that the published tray contains neither the capture runner nor its fixtures.

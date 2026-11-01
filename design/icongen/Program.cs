@@ -3,7 +3,7 @@
 //
 //     dotnet run --project design/icongen
 //
-// Windows: windows/FlockTray/Assets/AppIcon.ico and Tray{,Stopped,Warning}.{Light,Dark}.ico, the
+// Windows: windows/Flock.Tray/Assets/AppIcon.ico and Tray{,Stopped,Warning}.{Light,Dark}.ico, the
 // notification area icon for a light or dark taskbar, plus large .png copies for inside the
 // windows. macOS: macos/Resources/AppIcon.icns and MenuBar{,Stopped,Warning}{,@2x}.png, template
 // images that macOS tints for the menu bar itself.
@@ -26,7 +26,7 @@ var trayMarks = new Dictionary<string, string>
 };
 // Ember, the brand's "notice this now" color, for the warning badge.
 var ember = SKColor.Parse("#E8792B");
-var windowsAssets = Path.Combine(root, "windows", "FlockTray", "Assets");
+var windowsAssets = Path.Combine(root, "windows", "Flock.Tray", "Assets");
 var macResources = Path.Combine(root, "macos", "Resources");
 Directory.CreateDirectory(macResources);
 

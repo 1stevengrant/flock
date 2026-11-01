@@ -1,4 +1,4 @@
-//! The docs' screenshots, like macos/Sources/FlockScreenshots and windows/FlockScreenshots:
+//! The docs' screenshots, like macos/Sources/FlockScreenshots and windows/Flock.Screenshots:
 //! `cargo run --features screenshots -- --screenshots --out <dir> [--only id,id] [--theme light|dark]`
 //! opens the app's windows on the demo data in tools/screenshots/fixtures and saves them as
 //! <dir>/{id}-linux-{theme}.png at 2x. Each theme runs in a process of its own

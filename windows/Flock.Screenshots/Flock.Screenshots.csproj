@@ -2,7 +2,7 @@
     <!--
       Renders the tray app's windows with demo data into PNGs for the website's docs (how to run it:
       windows/README.md). It references the production tray assembly and runs its windows against a fake daemon.
-      build.ps1 publishes FlockTray.csproj only, so the capture runner and fixtures never reach the installer.
+      build.ps1 publishes Flock.Tray.csproj only, so the capture runner and fixtures never reach the installer.
     -->
     <PropertyGroup>
         <!-- A console program, so it can print what it renders (and why a shot failed) in CI. -->

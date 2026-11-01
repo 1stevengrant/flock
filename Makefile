@@ -33,6 +33,6 @@ windows:
 	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version=$(VERSION)" -o dist/windows-amd64/flock-helper.exe ./cmd/flock-helper
 	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -H windowsgui" -o dist/windows-amd64/flockd.exe ./cmd/flockd
 
-# The tray app's models and API client (windows/FlockKit) run on any OS; the app itself is built on Windows (windows/build.ps1).
+# The tray app's models and API client (windows/Flock.Kit) run on any OS; the app itself is built on Windows (windows/build.ps1).
 windows-test:
-	dotnet test windows/FlockKit.Tests
+	dotnet test windows/Flock.Kit.Tests

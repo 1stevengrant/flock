@@ -1,4 +1,4 @@
-# Renders the apps' windows with demo data for the website's docs (windows/FlockScreenshots,
+# Renders the apps' windows with demo data for the website's docs (windows/Flock.Screenshots,
 # macos/Sources/FlockScreenshots) and keeps the PNGs as run artifacts, by hand from the Actions
 # tab. A workflow of its own, so these files never mix with the build artifacts that beta.yml and
 # release.yml publish.
@@ -23,9 +23,9 @@ jobs:
 
       - name: Render
         run: |
-          dotnet build windows/FlockScreenshots -c Release -p:Platform=x64
+          dotnet build windows/Flock.Screenshots -c Release -p:Platform=x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $exe = Get-ChildItem windows/FlockScreenshots/bin/x64/Release -Recurse -Filter FlockScreenshots.exe | Select-Object -First 1
+          $exe = Get-ChildItem windows/Flock.Screenshots/bin/x64/Release -Recurse -Filter Flock.Screenshots.exe | Select-Object -First 1
           & $exe.FullName --out screenshots
           exit $LASTEXITCODE
 

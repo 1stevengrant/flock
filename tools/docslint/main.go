@@ -222,7 +222,7 @@ func lintTarget(root, name string, line int, image bool, target string, report f
 }
 
 // lintScreenshot checks a screenshot:id image. Its files are images/{id}-{platform}-{theme}.png,
-// as tools/screenshots' FlockScreenshots renders them. Until they're added, the website shows a
+// as tools/screenshots' Flock.Screenshots renders them. Until they're added, the website shows a
 // placeholder; once any is there, all of them must be.
 func lintScreenshot(root, name string, line int, image bool, id string, report func(string, int, string, ...any)) {
 	if !image {

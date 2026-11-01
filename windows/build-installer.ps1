@@ -1,5 +1,5 @@
 # Builds Flock-Setup-x64.exe into windows\dist\: the flock CLI, hosts helper and daemon launcher, the tray app
-# (via build.ps1, which also runs the FlockKit tests) and the Inno Setup installer around them.
+# (via build.ps1, which also runs the Flock.Kit tests) and the Inno Setup installer around them.
 #
 #   .\windows\build-installer.ps1
 #

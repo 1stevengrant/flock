@@ -4,7 +4,7 @@ using System.Globalization;
 namespace Flock.Tray;
 
 /// <summary>
-/// `FlockScreenshots --out &lt;dir&gt; [--only id,id]` renders Screenshots.All with the demo data in
+/// `Flock.Screenshots --out &lt;dir&gt; [--only id,id]` renders Screenshots.All with the demo data in
 /// tools/screenshots/fixtures into &lt;dir&gt;\{id}-windows-{light|dark}.png. WinUI fixes an app's theme
 /// when it starts, so each theme runs in a process of its own (--theme).
 /// </summary>
@@ -16,7 +16,7 @@ public static class ScreenshotProgram
         var options = Screenshots.Options.Parse(args);
         if (options is null)
         {
-            Console.Error.WriteLine("usage: FlockScreenshots --out <dir> [--only id,id] [--theme light|dark]");
+            Console.Error.WriteLine("usage: Flock.Screenshots --out <dir> [--only id,id] [--theme light|dark]");
             return 2;
         }
         if (options.Theme is null)

@@ -18,7 +18,7 @@
         <WindowsPackageType>None</WindowsPackageType>
         <!-- Compiles the XAML views and generates FlockTray.pri (merging WinUI's resources); without it,
              XamlControlsResources cannot find ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml. The cross-platform compile command is:
-             dotnet msbuild windows/FlockTray -restore -t:Compile -p:RuntimeIdentifier=win-x64 -p:Platform=x64 -p:WindowsAppSDKSelfContained=false -->
+             dotnet msbuild windows/Flock.Tray -restore -t:Compile -p:RuntimeIdentifier=win-x64 -p:Platform=x64 -p:WindowsAppSDKSelfContained=false -->
         <EnableMsixTooling>true</EnableMsixTooling>
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
         <SelfContained>true</SelfContained>
