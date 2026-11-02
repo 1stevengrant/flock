@@ -11,7 +11,8 @@ public enum TrayNotifyOperation
 }
 
 
-public readonly record struct TrayNotification(IntPtr Window, IntPtr Icon, string Tooltip);
+/// <summary>An icon registration; with a balloon title it also shows a notification (Windows shows it as a toast).</summary>
+public readonly record struct TrayNotification(IntPtr Window, IntPtr Icon, string Tooltip, string? BalloonTitle = null, string? BalloonText = null);
 public readonly record struct TrayPoint(int X, int Y);
 
 public readonly record struct TrayNativeMessage(
@@ -51,6 +52,8 @@ public sealed class TrayService : ITrayIcon, IDisposable
     private const int WM_LBUTTONUP = 0x0202;
     private const int WM_RBUTTONUP = 0x0205;
     private const int WM_CONTEXTMENU = 0x007B;
+    // A click on the icon's notification (WM_USER + 5).
+    private const int NIN_BALLOONUSERCLICK = 0x0405;
     private const int WM_SETTINGCHANGE = 0x001A;
     private const int WM_COPYDATA = 0x004A;
     private const int WM_SHOW_APP = Native.WM_SHOW_APP;
@@ -88,6 +91,7 @@ public sealed class TrayService : ITrayIcon, IDisposable
     public event Action? ShowRequested;
     public event Action<string>? LinkReceived;
     public event Action? ThemeChanged;
+    public event Action? NotificationClicked;
     public event Action<string>? Failure;
 
     public IntPtr Handle => window;
@@ -204,6 +208,22 @@ public sealed class TrayService : ITrayIcon, IDisposable
             else
             {
                 ReportFailure(new InvalidOperationException("Shell_NotifyIconW(NIM_MODIFY) failed."), "tray tooltip update");
+            }
+        }
+    }
+
+    /// <summary>Shows a notification from the icon; a click on it raises NotificationClicked.</summary>
+    public void ShowNotification(string title, string text)
+    {
+        lock (gate)
+        {
+            if (!started || disposed)
+            {
+                return;
+            }
+            if (!native.Notify(TrayNotifyOperation.Modify, new TrayNotification(window, icon, tooltip ?? "Flock", title, text)))
+            {
+                ReportFailure(new InvalidOperationException("Shell_NotifyIconW(NIM_MODIFY) failed."), "tray notification");
             }
         }
     }
@@ -363,6 +383,9 @@ public sealed class TrayService : ITrayIcon, IDisposable
                     case WM_RBUTTONUP:
                     case WM_CONTEXTMENU:
                         Publish(MenuRequested);
+                        break;
+                    case NIN_BALLOONUSERCLICK:
+                        Publish(NotificationClicked);
                         break;
                 }
                 return IntPtr.Zero;

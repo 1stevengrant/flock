@@ -19,8 +19,10 @@ public interface ITrayIcon : IDisposable
     event Action? ShowRequested;
     event Action<string>? LinkReceived;
     event Action? ThemeChanged;
+    event Action? NotificationClicked;
 
     void Update(string iconPath, string tooltip);
+    void ShowNotification(string title, string text);
     int ShowMenu(IReadOnlyList<string?> items, int defaultItem = -1);
     event Action<string>? Failure;
 }

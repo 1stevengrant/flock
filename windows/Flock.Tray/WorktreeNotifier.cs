@@ -1,16 +1,14 @@
 using Flock.Kit;
 using Flock.Tray.Infrastructure;
 using Microsoft.UI.Dispatching;
-using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 
 namespace Flock.Tray;
 
 /// <summary>
 /// Posts a Windows notification when a worktree's setup fails and no progress dialog follows it:
-/// worktrees an agent app or git created, or whose progress was hidden. Clicking it shows the
-/// worktree in Settings → Sites. Notifications are registered for the unpackaged app when it
-/// starts; where that isn't possible (screenshots, tests, an older Windows) nothing is posted.
+/// worktrees an agent app or git created, or whose progress was hidden. It comes from the tray
+/// icon, so it needs no app registration or extra runtime, and clicking it shows the worktree in
+/// Settings → Sites. Without a tray icon (screenshots, tests) nothing is posted.
 /// </summary>
 internal sealed class WorktreeNotifier
 {
@@ -18,59 +16,39 @@ internal sealed class WorktreeNotifier
     private readonly HashSet<string> followed = new(StringComparer.OrdinalIgnoreCase);
     private RuntimeService? model;
     private DispatcherQueue? dispatcher;
+    private ITrayIcon? tray;
     private Status? previous;
-    private bool registered;
+    // The worktree of the last notification: the icon shows one at a time, so a click is about it.
+    private string? shown;
 
     public void Follow(string path) => followed.Add(path);
 
     public void Unfollow(string path) => followed.Remove(path);
 
-    /// <summary>Registers the app's notifications and watches the status; does nothing when notifications can't be registered.</summary>
-    public void Start(RuntimeService state, DispatcherQueue queue)
+    /// <summary>Watches the status and posts through the tray icon.</summary>
+    public void Start(RuntimeService state, DispatcherQueue queue, ITrayIcon icon)
     {
-        try
-        {
-            if (!AppNotificationManager.IsSupported())
-            {
-                return;
-            }
-            // The handler goes first: Register() routes clicks to it from then on.
-            AppNotificationManager.Default.NotificationInvoked += Invoked;
-            AppNotificationManager.Default.Register();
-            registered = true;
-        }
-        catch (Exception error)
-        {
-            App.Log(error);
-            return;
-        }
         model = state;
         dispatcher = queue;
+        tray = icon;
         previous = state.Status;
+        tray.NotificationClicked += Clicked;
         state.Changed += Check;
     }
 
-    /// <summary>Called when the app quits, so a click on an old notification doesn't start it again.</summary>
+    /// <summary>Called when the app quits.</summary>
     public void Stop()
     {
-        if (!registered)
-        {
-            return;
-        }
-        registered = false;
         if (model is not null)
         {
             model.Changed -= Check;
         }
-        try
+        if (tray is not null)
         {
-            AppNotificationManager.Default.NotificationInvoked -= Invoked;
-            AppNotificationManager.Default.Unregister();
+            tray.NotificationClicked -= Clicked;
         }
-        catch (Exception error)
-        {
-            App.Log(error);
-        }
+        model = null;
+        tray = null;
     }
 
     /// <summary>Notifies of the worktrees whose setup failed since the last status.</summary>
@@ -98,16 +76,13 @@ internal sealed class WorktreeNotifier
         }
     }
 
-    private static void Post(Status.Site worktree, Status.WorktreeSetup setup)
+    private void Post(Status.Site worktree, Status.WorktreeSetup setup)
     {
         try
         {
-            var notification = new AppNotificationBuilder()
-                .AddArgument("site", worktree.Name)
-                .AddText($"Setting up {worktree.WorktreeLabel} failed")
-                .AddText($"{worktree.Parent}: {(setup.Error.Length > 0 ? setup.Error : "see its log")}")
-                .BuildNotification();
-            AppNotificationManager.Default.Show(notification);
+            tray?.ShowNotification($"Setting up {worktree.WorktreeLabel} failed",
+                $"{worktree.Parent}: {(setup.Error.Length > 0 ? setup.Error : "see its log")}");
+            shown = worktree.Name;
         }
         catch (Exception error)
         {
@@ -115,10 +90,9 @@ internal sealed class WorktreeNotifier
         }
     }
 
-    // Clicks arrive on a background thread.
-    private void Invoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+    private void Clicked()
     {
-        if (args.Arguments.TryGetValue("site", out var name))
+        if (shown is { } name)
         {
             dispatcher?.TryEnqueue(() => App.Current.OpenSite(name));
         }
