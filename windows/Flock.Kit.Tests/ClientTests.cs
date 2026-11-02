@@ -172,7 +172,8 @@ public class ClientTests : IDisposable
         // Creating runs git worktree add; removing runs the before_delete hook too.
         Assert.Equal("main", branches.Current);
         Assert.Equal("Copying the database", followed.Step);
-        Assert.Equal([TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(10)], handler.Timeouts);
+        // Setting up again and switching the database start a job and answer at once; as changes, they wait 30 seconds at least.
+        Assert.Equal([TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(10)], handler.Timeouts);
     }
 
     [Fact]
