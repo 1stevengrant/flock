@@ -98,18 +98,17 @@ struct NodePane: View {
                 Text("Not checked yet")
             }
             Text("·")
-            if checking {
-                ProgressView().controlSize(.mini)
-            } else {
-                Button("Check now") {
-                    checking = true
-                    Task {
-                        await model.settings.performOnNode { try await $0.checkNodeReleases() }
-                        checking = false
-                    }
+            Button {
+                checking = true
+                Task {
+                    await model.settings.performOnNode { try await $0.checkNodeReleases() }
+                    checking = false
                 }
-                .buttonStyle(.link)
+            } label: {
+                BusyLabel(title: "Check now", busyTitle: "Checking…", isBusy: checking)
             }
+            .buttonStyle(.link)
+            .disabled(checking)
         }
         .font(.caption)
         .foregroundStyle(.secondary)

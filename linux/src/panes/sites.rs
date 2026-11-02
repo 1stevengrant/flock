@@ -16,6 +16,7 @@ use super::{Data, Pane};
 use crate::api::{Client, Config, Error, ExtensionReport, PhpExtension, ShareStatus, SiteChange, SiteStatus, Status};
 use crate::links::{self, Link};
 use crate::model::AppModel;
+use crate::ui;
 
 #[derive(Clone)]
 pub struct SitesPane(Rc<Inner>);
@@ -165,32 +166,21 @@ impl Inner {
 
     fn render_list(self: &Rc<Self>) {
         let sites = self.status.borrow().as_ref().map(|s| s.sites.clone()).unwrap_or_default();
-        let group = group("", "");
-        let add = gtk::Button::builder().label("Add Site…").css_classes(["flat"]).build();
-        let this = self.clone();
-        add.connect_clicked(move |button| {
-            let window = button.root().and_downcast::<gtk::Window>();
-            let this = this.clone();
-            gtk::FileDialog::builder().title("Add Site").accept_label("Add").build().select_folder(
-                window.as_ref(),
-                gio::Cancellable::NONE,
-                move |result| {
-                    if let Some(path) = result.ok().and_then(|f| f.path()) {
-                        let path = path.to_string_lossy().into_owned();
-                        this.perform(move |c| c.link_site(&path));
-                    }
-                },
-            );
-        });
-        group.set_header_suffix(Some(&add));
+        // No sites: only the empty state, centred in the whole pane.
         if sites.is_empty() {
-            group.add(
-                &adw::ActionRow::builder()
-                    .title("No sites")
-                    .subtitle("Add a single site here, or add a project folder in General.")
-                    .build(),
-            );
+            let empty = ui::empty("dev.flock.Flock-sites-symbolic", "No sites", "Add a single site here, or add a project folder in General.");
+            let add = self.add_button();
+            add.add_css_class("suggested-action");
+            add.add_css_class("pill");
+            add.set_halign(gtk::Align::Center);
+            empty.set_child(Some(&add));
+            self.list.set_groups(&[empty.upcast()]);
+            return;
         }
+        let group = group("", "");
+        let add = self.add_button();
+        add.add_css_class("flat");
+        group.set_header_suffix(Some(&add));
         for site in &sites {
             let row = adw::ActionRow::builder()
                 .title(glib::markup_escape_text(&site.name))
@@ -219,6 +209,27 @@ impl Inner {
             group.add(&row);
         }
         self.list.set_groups(&[group.upcast()]);
+    }
+
+    /// Add Site…: picks a folder and links it.
+    fn add_button(self: &Rc<Self>) -> gtk::Button {
+        let add = gtk::Button::builder().label("Add Site…").build();
+        let this = self.clone();
+        add.connect_clicked(move |button| {
+            let window = button.root().and_downcast::<gtk::Window>();
+            let this = this.clone();
+            gtk::FileDialog::builder().title("Add Site").accept_label("Add").build().select_folder(
+                window.as_ref(),
+                gio::Cancellable::NONE,
+                move |result| {
+                    if let Some(path) = result.ok().and_then(|f| f.path()) {
+                        let path = path.to_string_lossy().into_owned();
+                        this.perform(move |c| c.link_site(&path));
+                    }
+                },
+            );
+        });
+        add
     }
 
     // MARK: a site's detail

@@ -9,7 +9,7 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 
 use super::common::{PaneView, ask_link, group, report};
-use super::versions::{badge, button, checked_text, confirm, more_menu};
+use super::versions::{badge, busy_button, button, checked_text, confirm, more_menu};
 use super::{Data, Pane};
 use crate::api::{Client, Error, NodeRelease, NodeVersions, SettingsChange};
 use crate::links::{self, Link};
@@ -153,22 +153,19 @@ impl Inner {
     fn check_button(self: &Rc<Self>, checked_at: Option<&str>) -> gtk::Widget {
         let line = gtk::Box::builder().spacing(6).build();
         line.append(&gtk::Label::builder().label(checked_text(checked_at)).css_classes(["caption", "dim-label"]).build());
-        if self.checking.get() {
-            line.append(&gtk::Spinner::builder().spinning(true).build());
-        } else {
-            let this = self.clone();
-            line.append(&button("Check now", false, move || {
-                this.checking.set(true);
-                this.render();
-                let this = this.clone();
-                glib::spawn_future_local(async move {
-                    let result = gio::spawn_blocking(|| Client.check_node()).await.expect("check request");
-                    this.checking.set(false);
-                    this.apply(result);
-                });
-            }));
-            line.last_child().expect("button").add_css_class("flat");
-        }
+        let this = self.clone();
+        let check = busy_button("Check now", "Checking…", self.checking.get(), move || {
+            this.checking.set(true);
+            this.render();
+            let this = this.clone();
+            glib::spawn_future_local(async move {
+                let result = gio::spawn_blocking(|| Client.check_node()).await.expect("check request");
+                this.checking.set(false);
+                this.apply(result);
+            });
+        });
+        check.add_css_class("flat");
+        line.append(&check);
         line.upcast()
     }
 

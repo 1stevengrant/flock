@@ -44,6 +44,21 @@ pub fn button(label: &str, suggested: bool, clicked: impl Fn() + 'static) -> gtk
     button
 }
 
+/// A button that, while busy, shows a spinner and busy_label instead of label and can't be clicked.
+pub fn busy_button(label: &str, busy_label: &str, busy: bool, clicked: impl Fn() + 'static) -> gtk::Button {
+    let button = gtk::Button::builder().valign(gtk::Align::Center).sensitive(!busy).build();
+    if busy {
+        let content = gtk::Box::builder().spacing(6).build();
+        content.append(&gtk::Spinner::builder().spinning(true).build());
+        content.append(&gtk::Label::new(Some(busy_label)));
+        button.set_child(Some(&content));
+    } else {
+        button.set_label(label);
+    }
+    button.connect_clicked(move |_| clicked());
+    button
+}
+
 /// An action of more_menu: its label, whether it can be chosen, whether it is destructive, and what it does.
 pub type MenuItem = (String, bool, bool, Box<dyn Fn()>);
 

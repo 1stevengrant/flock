@@ -43,8 +43,10 @@ struct GeneralPane: View {
                         LabeledContent("Process", value: "pid \(status.pid)")
                     }
                     LabeledContent("") {
-                        Button(model.isRestarting ? "Restarting…" : "Restart Daemon") {
+                        Button {
                             Task { await model.restart() }
+                        } label: {
+                            BusyLabel(title: "Restart Daemon", busyTitle: "Restarting…", isBusy: model.isRestarting)
                         }
                         .disabled(model.isRestarting)
                     }
