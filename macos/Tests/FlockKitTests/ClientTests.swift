@@ -227,7 +227,7 @@ struct ClientTests {
         #expect(bodies[2].contains(#""line":"8.4""#) && bodies[2].contains(#""port":3307"#))
         #expect(bodies[3].contains(#""line":"""#) && bodies[3].contains(#""port":0"#))
         #expect(bodies[6].contains(#""line":"9.7""#))
-        #expect(StubProtocol.requests.map(\.timeout) == [5, 60, 5, 5, 5, 5, 60, 60, 60, 60, 5, 5])
+        #expect(StubProtocol.requests.map(\.timeout) == [5, 60, 30, 30, 30, 30, 60, 60, 60, 60, 5, 5])
     }
 
     @Test func talksToTheAIClientAndBoostEndpoints() async throws {

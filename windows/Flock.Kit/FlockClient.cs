@@ -352,6 +352,9 @@ public sealed class FlockClient : IDisposable
     public static readonly HttpRequestOptionsKey<TimeSpan> TimeoutOption = new("Flock.Timeout");
 
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
+    // A change reloads the daemon, which may start PHP: the first start after an install can take
+    // several seconds while an antivirus scans it. Any request but a GET waits this long at least.
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
 
     private Task<T> Get<T>(string path, CancellationToken cancellationToken = default) => Send<T>(HttpMethod.Get, path, cancellationToken: cancellationToken);
 
@@ -419,6 +422,10 @@ public sealed class FlockClient : IDisposable
     private async Task<byte[]> ExecuteAttempt(HttpMethod method, string path, object? body, TimeSpan? timeout, bool force, CancellationToken cancellationToken)
     {
         var limit = timeout ?? DefaultTimeout;
+        if (method != HttpMethod.Get && limit < WriteTimeout)
+        {
+            limit = WriteTimeout;
+        }
         using var timeoutCts = new CancellationTokenSource(limit, timeProvider);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
         try
