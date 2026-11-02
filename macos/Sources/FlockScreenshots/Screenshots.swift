@@ -3,7 +3,7 @@ import AppKit
 
 /// The shots for the website's docs: each opens a window on the demo data, waits for it to settle
 /// and saves it as {id}-macos-{theme}.png. The ids are the docs' screenshot:… placeholders and the
-/// same as in windows/FlockScreenshots/Screenshots.cs.
+/// same as in windows/Flock.Screenshots/Screenshots.cs.
 @MainActor
 final class Screenshots {
     /// One screenshot and how to show it.

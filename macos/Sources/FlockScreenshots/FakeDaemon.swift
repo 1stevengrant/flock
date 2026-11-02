@@ -7,7 +7,7 @@ import Network
 /// become times relative to now, so "3 hours ago" stays true. Changes (POST, PATCH, DELETE) are
 /// refused: a shot shows state.
 ///
-/// The fixtures are shared with windows/FlockScreenshots and come from a Windows machine, so
+/// The fixtures are shared with windows/Flock.Screenshots and come from a Windows machine, so
 /// `MacFixtures` turns them into what a Mac's daemon answers (paths, services) first.
 final class FakeDaemon: @unchecked Sendable {
     private let fixtures: URL
