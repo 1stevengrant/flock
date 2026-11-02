@@ -345,6 +345,9 @@ func (c *Client) UpdateSettings(ctx context.Context, s Settings) (Status, error)
 	return status, err
 }
 
+// writeTimeout is how long any request but a GET may take, at least.
+const writeTimeout = 30 * time.Second
+
 // slow is the client for requests that wait on the network or copy files (checks, installs).
 func (c *Client) slow() *Client {
 	return c.timeout(2 * time.Minute)
@@ -381,7 +384,13 @@ func (c *Client) send(ctx context.Context, method, path string, body, out any) e
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := c.http.Do(req)
+	client := c.http
+	// A change reloads the daemon, which may start PHP: the first start after an install can take
+	// several seconds while an antivirus scans it.
+	if method != http.MethodGet && client.Timeout < writeTimeout {
+		client = &http.Client{Transport: client.Transport, Timeout: writeTimeout}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		var opErr *net.OpError
 		if errors.As(err, &opErr) && opErr.Op == "dial" {

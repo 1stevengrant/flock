@@ -541,15 +541,21 @@ func (d *daemon) reload() error {
 		breakpoints = map[string]bool{}     // site path → PhpStorm breakpoints found
 	)
 
-	// ensurePool starts a pool and waits for it to listen: Caddy would answer 502 until it does.
+	// ensurePool starts a pool. The pools that (re)started are waited for together before Caddy
+	// gets the new config: it would answer 502 until they listen.
+	type startedPool struct {
+		upstreams []string
+		log       string
+	}
+	var started []startedPool
 	ensurePool := func(pool php.Pool, log string) {
 		restarted := false
 		for _, spec := range pool.Specs {
 			restarted = d.procs.Ensure(spec) || restarted
 			keep[spec.Name] = true
 		}
-		if restarted && !php.WaitReady(pool.Upstreams, 5*time.Second) {
-			warnings = append(warnings, fmt.Sprintf("php: %s did not start — see `flock logs %s`", log, log))
+		if restarted {
+			started = append(started, startedPool{pool.Upstreams, log})
 		}
 	}
 
@@ -801,6 +807,20 @@ func (d *daemon) reload() error {
 	}
 
 	d.procs.Retain(keep)
+
+	// The pools that started, waited for together: a cold start (an antivirus scanning PHP the
+	// first time) shouldn't add up per pool.
+	ready := make([]bool, len(started))
+	var wg sync.WaitGroup
+	for i, pool := range started {
+		wg.Go(func() { ready[i] = php.WaitReady(pool.upstreams, 5*time.Second) })
+	}
+	wg.Wait()
+	for i, pool := range started {
+		if !ready[i] {
+			warnings = append(warnings, fmt.Sprintf("php: %s did not start — see `flock logs %s`", pool.log, pool.log))
+		}
+	}
 
 	bind := "127.0.0.1"
 	if runtime.GOOS == "darwin" && (cfg.Ports.HTTP < 1024 || cfg.Ports.HTTPS < 1024) {
