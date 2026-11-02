@@ -65,15 +65,21 @@ internal sealed class WorktreeNotifier
         {
             return;
         }
-        var states = before.Sites.GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First().Worktree?.State);
-        foreach (var site in status.Sites)
+        foreach (var site in NewlyFailed(before, status, followed))
         {
-            if (site.IsWorktree && site.Worktree is { IsFailed: true } setup && !followed.Contains(site.Path)
-                && states.TryGetValue(site.Name, out var state) && state != Status.WorktreeState.Failed)
-            {
-                Post(site, setup);
-            }
+            Post(site, site.Worktree!);
         }
+    }
+
+    /// <summary>
+    /// The worktrees whose setup failed since before and that no dialog follows: one that wasn't
+    /// failed then, or wasn't there at all (a setup can fail before a status shows it running).
+    /// </summary>
+    internal static IEnumerable<Status.Site> NewlyFailed(Status before, Status now, IReadOnlySet<string> followed)
+    {
+        var states = before.Sites.GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First().Worktree?.State);
+        return now.Sites.Where(site => site.IsWorktree && site.Worktree is { IsFailed: true } && !followed.Contains(site.Path)
+            && (!states.TryGetValue(site.Name, out var state) || state != Status.WorktreeState.Failed));
     }
 
     private void Post(Status.Site worktree, Status.WorktreeSetup setup)

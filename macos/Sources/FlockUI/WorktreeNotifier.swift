@@ -29,7 +29,8 @@ final class WorktreeNotifier: NSObject, UNUserNotificationCenterDelegate {
         guard let previous else { return }
         let before = Dictionary(previous.sites.map { ($0.name, $0.worktree?.state) }, uniquingKeysWith: { a, _ in a })
         for site in new.sites where site.isWorktree && site.worktree?.state == .failed && !followed.contains(site.path) {
-            if let state = before[site.name], state != .failed {
+            // Not failed before, or not there at all: a setup can fail before a status shows it running.
+            if (before[site.name] ?? nil) != .failed {
                 post(site)
             }
         }

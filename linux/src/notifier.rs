@@ -24,7 +24,8 @@ pub fn start(app: &adw::Application, model: &Rc<AppModel>) {
         let Some(before) = states.replace(Some(now)) else { return };
         for site in worktrees {
             let Some(setup) = site.worktree.as_ref().filter(|w| w.failed()) else { continue };
-            if model.follows_worktree(&site.path) || !before.get(&site.name).is_some_and(|state| state != "failed") {
+            // Not failed before, or not there at all: a setup can fail before a status shows it running.
+            if model.follows_worktree(&site.path) || before.get(&site.name).is_some_and(|state| state == "failed") {
                 continue;
             }
             let notification = gio::Notification::new(&format!("Setting up {} failed", site.worktree_label()));
