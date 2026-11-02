@@ -34,6 +34,9 @@ struct ApiConfig {
 
 /// Default timeout of a request; slow endpoints pass their own.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Any request but a GET waits this long at least: a change reloads the daemon, which may start
+/// PHP, and the first start after an install can take several seconds while it is scanned.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Fetching the package manifest (the daemon gives up after 50 seconds).
 const CHECK_TIMEOUT: Duration = Duration::from_secs(60);
 /// Changing versions waits for the daemon's work, like the Go CLI (2 minutes).
@@ -471,6 +474,7 @@ impl Client {
     fn send<B: Serialize>(&self, method: &str, path: &str, body: Option<&B>, timeout: Duration) -> Result<Vec<u8>, Error> {
         let data = std::fs::read(paths::api_json()).map_err(|_| Error::NotRunning)?;
         let config: ApiConfig = serde_json::from_slice(&data).map_err(|_| Error::NotRunning)?;
+        let timeout = if method == "GET" { timeout } else { timeout.max(WRITE_TIMEOUT) };
         let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(timeout)).build().into();
         let url = format!("{}{}", config.url.trim_end_matches('/'), path);
         let auth = format!("Bearer {}", config.token);

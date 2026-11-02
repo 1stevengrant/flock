@@ -40,6 +40,9 @@ public actor FlockClient {
 
     /// Default timeout of a request; slow endpoints pass their own.
     static let defaultTimeout: TimeInterval = 5
+    /// Any request but a GET waits this long at least: a change reloads the daemon, which may start
+    /// PHP, and the first start after an install can take several seconds while it is scanned.
+    static let writeTimeout: TimeInterval = 30
     /// Changing PHP versions waits for the daemon's work, like the Go CLI (2 minutes).
     static let phpChangeTimeout: TimeInterval = 120
     /// Installing or updating a PostgreSQL major downloads it first (10 minutes).
@@ -576,7 +579,7 @@ public actor FlockClient {
 
         var request = URLRequest(url: components.url!)
         request.httpMethod = method
-        request.timeoutInterval = timeout ?? Self.defaultTimeout
+        request.timeoutInterval = method == "GET" ? timeout ?? Self.defaultTimeout : max(timeout ?? 0, Self.writeTimeout)
         request.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         if let body {
             request.httpBody = body

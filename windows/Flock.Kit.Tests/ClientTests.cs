@@ -334,9 +334,9 @@ public class ClientTests : IDisposable
                 "DELETE /v1/frankenphp/8.4",
             ],
             handler.Requests.Select(r => $"{r.Method} {r.RequestUri!.PathAndQuery}"));
-        // Installs return at once (the job runs in the daemon); uninstalling may stop a process first.
+        // Changes wait 30 seconds at least (a reload may start PHP); uninstalling may stop a process first.
         Assert.Equal(
-            [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60)],
+            [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60)],
             handler.Timeouts);
     }
 
@@ -358,8 +358,8 @@ public class ClientTests : IDisposable
             ["PATCH /v1/sites/shop", "PATCH /v1/sites/shop", "PATCH /v1/sites/shop", "POST /v1/sites/shop/restart"],
             handler.Requests.Select(r => $"{r.Method} {r.RequestUri!.PathAndQuery}"));
         Assert.Equal(["""{"server":"frankenphp"}""", """{"worker":""}""", """{"secured":true}""", ""], handler.Bodies);
-        // Switching servers and restarting wait for FrankenPHP to come up.
-        Assert.Equal([TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(1)], handler.Timeouts);
+        // Switching servers and restarting wait for FrankenPHP to come up; other changes 30 seconds.
+        Assert.Equal([TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1)], handler.Timeouts);
     }
 
     [Fact]
