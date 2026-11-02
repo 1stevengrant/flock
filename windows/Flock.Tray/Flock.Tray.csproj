@@ -8,6 +8,8 @@
         <RootNamespace>Flock.Tray</RootNamespace>
         <AssemblyName>FlockTray</AssemblyName>
         <Product>Flock</Product>
+        <!-- The file description: the name Windows shows on the tray icon's notifications and in Task Manager. -->
+        <AssemblyTitle>Flock</AssemblyTitle>
         <Company>Guava s.r.o.</Company>
         <Copyright>Copyright © Guava s.r.o.</Copyright>
         <Version>0.1.0</Version>
