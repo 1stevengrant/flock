@@ -8,6 +8,7 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 
 use super::common::{PaneView, group, info_row, report, status_dot, switch_row};
+use super::versions::busy_button;
 use super::{Data, Pane};
 use crate::api::{Client, Config, Status};
 use crate::autostart;
@@ -50,14 +51,8 @@ impl GeneralPane {
         group.add(&info_row("Version", &status.version));
         group.add(&info_row("Process", &format!("pid {}", status.pid)));
 
-        let restarting = self.model.is_restarting();
-        let restart = gtk::Button::builder()
-            .label(if restarting { "Restarting…" } else { "Restart Daemon" })
-            .valign(gtk::Align::Center)
-            .sensitive(!restarting)
-            .build();
         let model = self.model.clone();
-        restart.connect_clicked(move |_| model.restart());
+        let restart = busy_button("Restart Daemon", "Restarting…", self.model.is_restarting(), move || model.restart());
         let row = adw::ActionRow::new();
         row.add_suffix(&restart);
         group.add(&row);

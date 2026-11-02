@@ -62,6 +62,24 @@ extension DetailSectionTitle where Trailing == EmptyView {
     }
 }
 
+/// A button's label that, while busy, shows a spinner and what the button is doing ("Checking…").
+struct BusyLabel: View {
+    let title: String
+    let busyTitle: String
+    let isBusy: Bool
+
+    var body: some View {
+        if isBusy {
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.mini)
+                Text(busyTitle)
+            }
+        } else {
+            Text(title)
+        }
+    }
+}
+
 /// "Last checked 3 hours ago · Check for Updates", with the check's error behind a warning icon.
 struct CheckForUpdatesLine: View {
     let checkedAt: Date?

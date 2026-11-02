@@ -112,18 +112,17 @@ struct PHPPane: View {
                 Text("Not checked yet")
             }
             Text("·")
-            if checking {
-                ProgressView().controlSize(.mini)
-            } else {
-                Button("Check now") {
-                    checking = true
-                    Task {
-                        await model.settings.performOnPHP { try await $0.checkPHPReleases() }
-                        checking = false
-                    }
+            Button {
+                checking = true
+                Task {
+                    await model.settings.performOnPHP { try await $0.checkPHPReleases() }
+                    checking = false
                 }
-                .buttonStyle(.link)
+            } label: {
+                BusyLabel(title: "Check now", busyTitle: "Checking…", isBusy: checking)
             }
+            .buttonStyle(.link)
+            .disabled(checking)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -332,6 +331,11 @@ private struct FrankenPHPBuildRow: View {
     @Environment(AppModel.self) private var model
     let build: FrankenPHPBuild
 
+    private let confirmUninstallState = State<Bool>(initialValue: false)
+    private var confirmUninstall: Bool {
+        get { confirmUninstallState.wrappedValue }
+        nonmutating set { confirmUninstallState.wrappedValue = newValue }
+    }
     /// A request of this row is waiting for the daemon; its buttons stay disabled until it answers.
     private let busyState = State<Bool>(initialValue: false)
     private var busy: Bool {
@@ -361,6 +365,13 @@ private struct FrankenPHPBuildRow: View {
                 .disabled(busy)
         }
         .padding(.vertical, 3)
+        .confirmationDialog("Uninstall FrankenPHP for PHP \(build.php)?", isPresented: confirmUninstallState.projectedValue) {
+            Button("Uninstall", role: .destructive) {
+                run { try await $0.uninstallFrankenPHP(build.php) }
+            }
+        } message: {
+            Text("Sites that run on FrankenPHP with this version are served by PHP-FPM until it has downloaded again by itself.")
+        }
     }
 
     private var installedText: String {
@@ -443,9 +454,7 @@ private struct FrankenPHPBuildRow: View {
                 .help(build.size > 0 ? "Downloads FrankenPHP for PHP \(build.latest) (\(build.size / 1_000_000) MB)" : "")
             }
             if build.isInstalled {
-                Button("Remove") {
-                    run { try await $0.uninstallFrankenPHP(build.php) }
-                }
+                Button("Uninstall…", role: .destructive) { confirmUninstall = true }
             }
         }
     }

@@ -10,7 +10,7 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 
 use super::common::{PaneView, ask_link, group, report};
-use super::versions::{MenuItem, badge, button, checked_text, confirm, detail, more_menu, show_log};
+use super::versions::{MenuItem, badge, busy_button, button, checked_text, confirm, detail, more_menu, show_log};
 use super::{Data, Pane};
 use crate::api::{Client, Error, FrankenPhpBuild, FrankenPhpState, PhpRelease, PhpVersions, SettingsChange};
 use crate::links::{self, Link};
@@ -158,23 +158,20 @@ impl Inner {
     fn check_button(self: &Rc<Self>, checked_at: Option<&str>) -> gtk::Widget {
         let line = gtk::Box::builder().spacing(6).build();
         line.append(&gtk::Label::builder().label(checked_text(checked_at)).css_classes(["caption", "dim-label"]).build());
-        if self.checking.get() {
-            line.append(&gtk::Spinner::builder().spinning(true).build());
-        } else {
-            let this = self.clone();
-            let check = gtk::Button::builder().label("Check now").css_classes(["flat", "caption"]).build();
-            check.connect_clicked(move |_| {
-                this.checking.set(true);
-                this.render();
-                let this = this.clone();
-                glib::spawn_future_local(async move {
-                    let result = gio::spawn_blocking(|| Client.check_php()).await.expect("check request");
-                    this.checking.set(false);
-                    this.apply_php(result);
-                });
+        let this = self.clone();
+        let check = busy_button("Check now", "Checking…", self.checking.get(), move || {
+            this.checking.set(true);
+            this.render();
+            let this = this.clone();
+            glib::spawn_future_local(async move {
+                let result = gio::spawn_blocking(|| Client.check_php()).await.expect("check request");
+                this.checking.set(false);
+                this.apply_php(result);
             });
-            line.append(&check);
-        }
+        });
+        check.add_css_class("flat");
+        check.add_css_class("caption");
+        line.append(&check);
         line.upcast()
     }
 
@@ -438,7 +435,21 @@ impl Inner {
                     actions.append(&run(&label, true, Client::install_frankenphp));
                 }
                 if installed {
-                    actions.append(&run("Remove", false, Client::uninstall_frankenphp));
+                    let (this, m, r) = (self.clone(), minor.clone(), row.clone());
+                    let uninstall = button("Uninstall…", false, move || {
+                        let (t, m) = (this.clone(), m.clone());
+                        confirm(
+                            &r,
+                            &format!("Uninstall FrankenPHP for PHP {m}?"),
+                            "Sites that run on FrankenPHP with this version are served by PHP-FPM until it has downloaded again by itself.",
+                            "Uninstall",
+                            move || {
+                                let m2 = m.clone();
+                                t.run_frankenphp(&m, move |c| c.uninstall_frankenphp(&m2));
+                            },
+                        );
+                    });
+                    actions.append(&uninstall);
                 }
             }
         }

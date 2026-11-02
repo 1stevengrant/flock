@@ -23,6 +23,7 @@ use crate::api::{
 use crate::links::{self, Link};
 use crate::model::AppModel;
 use crate::prefs;
+use crate::ui;
 
 #[derive(Clone)]
 pub struct SitesPane(Rc<Inner>);
@@ -199,8 +200,36 @@ impl Inner {
     fn render_list(self: &Rc<Self>) {
         let status = self.status.borrow().clone().unwrap_or_default();
         let sites = status.top_sites();
+        // No sites: only the empty state, centred in the whole pane.
+        if sites.is_empty() {
+            let empty =
+                ui::empty("dev.flock.Flock-sites-symbolic", "No sites", "Add a single site here, or add a project folder in General.");
+            let add = self.add_button();
+            add.add_css_class("suggested-action");
+            add.add_css_class("pill");
+            add.set_halign(gtk::Align::Center);
+            empty.set_child(Some(&add));
+            self.list.set_groups(&[empty.upcast()]);
+            return;
+        }
         let group = group("", "");
-        let add = gtk::Button::builder().label("Add Site…").css_classes(["flat"]).build();
+        let add = self.add_button();
+        add.add_css_class("flat");
+        group.set_header_suffix(Some(&add));
+        for site in sites {
+            let worktrees = status.worktrees_of(&site.name);
+            if worktrees.is_empty() {
+                group.add(&self.site_row(site));
+            } else {
+                group.add(&self.expander(site, &worktrees));
+            }
+        }
+        self.list.set_groups(&[group.upcast()]);
+    }
+
+    /// Add Site…: picks a folder and links it.
+    fn add_button(self: &Rc<Self>) -> gtk::Button {
+        let add = gtk::Button::builder().label("Add Site…").build();
         let this = self.clone();
         add.connect_clicked(move |button| {
             let window = button.root().and_downcast::<gtk::Window>();
@@ -216,24 +245,7 @@ impl Inner {
                 },
             );
         });
-        group.set_header_suffix(Some(&add));
-        if sites.is_empty() {
-            group.add(
-                &adw::ActionRow::builder()
-                    .title("No sites")
-                    .subtitle("Add a single site here, or add a project folder in General.")
-                    .build(),
-            );
-        }
-        for site in sites {
-            let worktrees = status.worktrees_of(&site.name);
-            if worktrees.is_empty() {
-                group.add(&self.site_row(site));
-            } else {
-                group.add(&self.expander(site, &worktrees));
-            }
-        }
-        self.list.set_groups(&[group.upcast()]);
+        add
     }
 
     /// A site's row, or a worktree's (by its branch), which opens its detail.
