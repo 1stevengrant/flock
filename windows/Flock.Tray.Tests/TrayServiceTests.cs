@@ -114,6 +114,24 @@ public sealed class TrayServiceTests
     }
 
     [Fact]
+    public async Task NotificationsComeFromTheIconAndReportTheirClicks()
+    {
+        var native = new FakeTrayNative();
+        var tray = new TrayService(native);
+        var clicks = 0;
+        tray.NotificationClicked += () => clicks++;
+        tray.Clicked += () => throw new InvalidOperationException("a notification click isn't a click on the icon");
+        await tray.StartAsync("first.ico", "Flock");
+
+        tray.ShowNotification("Setting up checkout failed", "acme: composer install failed");
+        native.Emit(new TrayNativeMessage(native.Window, 0x8001, IntPtr.Zero, (IntPtr)0x0405, null, null));
+
+        var shown = Assert.Single(native.Notifications);
+        Assert.Equal(("Setting up checkout failed", "acme: composer install failed", "Flock"), (shown.BalloonTitle, shown.BalloonText, shown.Tooltip));
+        Assert.Equal(1, clicks);
+    }
+
+    [Fact]
     public async Task StartupPreservesOriginalFailureWhenCleanupFails()
     {
         var native = new FakeTrayNative { Failure = Failure.Add, ThrowOnDestroyIcon = true };
@@ -149,6 +167,7 @@ public sealed class TrayServiceTests
         public int LoadImageCalls { get; private set; }
         public List<TrayNotifyOperation> NotifyCalls { get; } = [];
         public List<IntPtr> ModifyIcons { get; } = [];
+        public List<TrayNotification> Notifications { get; } = [];
         public List<string> Calls { get; } = [];
         private Func<TrayNativeMessage, IntPtr?>? callback;
 
@@ -185,6 +204,10 @@ public sealed class TrayServiceTests
             if (operation == TrayNotifyOperation.Modify)
             {
                 ModifyIcons.Add(notification.Icon);
+                if (notification.BalloonTitle is not null)
+                {
+                    Notifications.Add(notification);
+                }
                 return !FailModify;
             }
             if (operation == TrayNotifyOperation.Add && Failure == Failure.Add)

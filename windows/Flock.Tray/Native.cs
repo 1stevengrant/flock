@@ -339,7 +339,9 @@ internal static partial class Native
         public IntPtr hBalloonIcon;
     }
 
-    private const int NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4;
+    private const int NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_INFO = 0x10;
+    // No icon of its own (the toast shows the app's), and none while Focus or a full-screen app is on.
+    private const int NIIF_NONE = 0x0, NIIF_RESPECT_QUIET_TIME = 0x80;
     private const int IMAGE_ICON = 1, LR_LOADFROMFILE = 0x10, SM_CXSMICON = 49;
     private const int ERROR_CLASS_ALREADY_EXISTS = 1410;
 
@@ -483,6 +485,14 @@ internal static partial class Native
             szInfo = "",
             szInfoTitle = "",
         };
+        if (notification.BalloonTitle is { } title)
+        {
+            var text = notification.BalloonText ?? "";
+            data.uFlags |= NIF_INFO;
+            data.szInfoTitle = title.Length > 63 ? title[..63] : title;
+            data.szInfo = text.Length > 255 ? text[..255] : text;
+            data.dwInfoFlags = NIIF_NONE | NIIF_RESPECT_QUIET_TIME;
+        }
         return Shell_NotifyIcon((int)operation, ref data);
     }
 
