@@ -168,7 +168,8 @@ impl Inner {
         let sites = self.status.borrow().as_ref().map(|s| s.sites.clone()).unwrap_or_default();
         // No sites: only the empty state, centred in the whole pane.
         if sites.is_empty() {
-            let empty = ui::empty("dev.flock.Flock-sites-symbolic", "No sites", "Add a single site here, or add a project folder in General.");
+            let empty =
+                ui::empty("dev.flock.Flock-sites-symbolic", "No sites", "Add a single site here, or add a project folder in General.");
             let add = self.add_button();
             add.add_css_class("suggested-action");
             add.add_css_class("pill");
