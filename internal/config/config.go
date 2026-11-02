@@ -223,7 +223,7 @@ func file(root string) string {
 func Load(root string) (*Config, error) {
 	cfg := Default()
 
-	data, err := os.ReadFile(file(root))
+	data, err := readFile(file(root))
 	if errors.Is(err, os.ErrNotExist) {
 		return cfg, nil
 	}
@@ -277,7 +277,7 @@ func (c *Config) Save(root string) error {
 		return err
 	}
 
-	return os.Rename(tmp, file(root))
+	return replaceFile(tmp, file(root))
 }
 
 // Domain is the primary hostname of a site.
